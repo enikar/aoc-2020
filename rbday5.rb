@@ -22,8 +22,8 @@ def part2(values)
     if n != v
       id = v
       break
-    else
-      v = n + 1
+    else # v == n
+      v += 1
     end
   end
   id
