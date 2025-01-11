@@ -42,7 +42,7 @@ main = do
   bags <- getDatas "day7.txt"
   printSolution "Part1" (part1 bags)
 
--- is there a way to accomplish the same thing is one pass?
+-- is there a way to accomplish the same thing in one pass?
 part1 :: Map Bag [Content] -> Int
 part1 = go 0 (Set.singleton "shiny gold")
   where
