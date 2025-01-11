@@ -42,7 +42,7 @@ main = do
   bags <- getDatas "day7.txt"
   printSolution "Part1" (part1 bags)
 
--- is there a way to accomplish the same thing in one pass?
+
 part1 :: Map Bag [Content] -> Int
 part1 = go 0 (Set.singleton "shiny gold")
   where
@@ -78,18 +78,14 @@ getDatas filename = parseDatas <$> BC.readFile filename
 
 -- Here the parsing is tough
 -- How to parse properly this style of input file
--- TODO: Try readP instead.
 parseDatas :: ByteString -> Bags
 parseDatas str =
   either error
          id
          (parseOnly parseRecords str)
 
-
 parseRecords :: Parser Bags
-parseRecords = do
-  bags <- sepBy1' parseBag endRecord
-  pure (buildBags bags)
+parseRecords = buildBags <$> sepBy1' parseBag endRecord
 
 endRecord :: Parser ()
 endRecord = do
@@ -110,16 +106,17 @@ parseBag = do
 parseBag' :: Parser (Bag, ByteString)
 parseBag' = do
   s <- many1 (satisfy (\c -> c /= '.' && c /= '\n'))
-  let xs = splitOn " bags contain " s
+  let xs = splitOn " contain " s -- we can also splitOn " bags contain ".
+                                 -- It'll be the same because toBag strips
+                                 -- suffixes " bags" and " bag" or nothing.
   pure (case xs of
           [b, r] -> (toBag b, BC.pack r)
           _      -> error "Error: parseBag'")
 
--- Although, we use ", " as separator, we can't use
+-- We use ", " as separator, so we can't use
 -- (many1 anyChar) to parse the bag. Instead we must use
--- (many1 (satisfy (/= ','))). It's odd because at this
--- point it shouldn't exist a character ',' in the string
--- we parse.
+-- (many1 (satisfy (/= ','))) to say to Attoparsec to stop
+-- parsing at character ','
 parseContain :: Parser Content
 parseContain = do
   n <- decimal
@@ -134,8 +131,8 @@ buildBags = foldl' f MapS.empty
     f acc (b, contained) = MapS.insert b contained acc
 
 toBag :: String -> Bag
-toBag str = fromJust (BC.stripSuffix " bag" str'
-                      <|> BC.stripSuffix " bags" str'
+toBag str = fromJust (BC.stripSuffix " bags" str'
+                      <|> BC.stripSuffix " bag" str'
                       <|> Just str')
   where
     str' = BC.pack str
