@@ -14,7 +14,12 @@ module Main(main) where
 import Data.List (foldl')
 
 import Control.Applicative ((<|>))
-import Data.Maybe (fromMaybe)
+import Data.Maybe
+  (fromMaybe
+  ,isJust
+  ,fromJust
+  )
+import Data.Either (fromRight)
 import Data.Functor (void)
 import Data.Char
   (isSpace
@@ -37,16 +42,17 @@ import Data.Attoparsec.ByteString.Char8
 data Height = Inch Int
               |CM Int
               |NoUnit Int
+              |None
             deriving (Show, Eq)
 
 data Passeport =
-  Passeport {byr :: Int
-            ,iyr :: Int
-            ,eyr :: Int
+  Passeport {byr :: Maybe Int
+            ,iyr :: Maybe Int
+            ,eyr :: Maybe Int
             ,hgt :: Height
-            ,hcl :: ByteString
-            ,ecl :: ByteString
-            ,pid :: ByteString
+            ,hcl :: Maybe ByteString
+            ,ecl :: Maybe ByteString
+            ,pid :: Maybe ByteString
             ,cid :: Maybe ByteString
             ,valid :: Bool
             } deriving (Show)
@@ -66,20 +72,14 @@ main = do
 --       |otherwise = acc
 
 validP :: Passeport -> Bool
-validP Passeport {..} = byr /= 0
-                        && iyr /= 0
-                        && eyr /= 0
-                        && checkHgt
-                        && not (BC.null hcl)
-                        && not (BC.null ecl)
-                        && not (BC.null pid)
+validP Passeport {..} = isJust byr
+                        && isJust iyr
+                        && isJust eyr
+                        && hgt /= None
+                        && isJust hcl
+                        && isJust ecl
+                        && isJust pid
                         && valid
-  where
-    checkHgt = case hgt of
-                CM 0     -> False
-                Inch 0   -> False
-                NoUnit 0 -> False
-                _        -> True
 
 ecls :: [ByteString]
 ecls = ["amb"
@@ -99,16 +99,19 @@ validP' Passeport {..} = checked
   where
     between inf sup val = val >= inf && val <= sup
 
-    checked = between 1920 2002 byr
-              && between 2010 2020 iyr
-              && between 2020 2030 eyr
-              && ecl `elem` ecls
-              && BC.length pid == 9
-              && BC.all isDigit pid
-              && BC.head hcl == '#'
-              && BC.all (`elem` hexDigits) (BC.tail hcl)
-              && checkHeight
 
+    checked = between 1920 2002 (fromJust byr)
+              && between 2010 2020 (fromJust iyr)
+              && between 2020 2030 (fromJust eyr)
+              && fromJust ecl `elem` ecls
+              && BC.length pid' == 9
+              && BC.all isDigit pid'
+              && BC.head hcl' == '#'
+              && BC.all (`elem` hexDigits) (BC.tail hcl')
+              && checkHeight
+      where
+        pid' = fromJust pid
+        hcl' = fromJust hcl
     checkHeight = case hgt of
                     CM n   -> between 150 193 n
                     Inch n -> between 59 76 n
@@ -153,40 +156,43 @@ parseField = do
 
 
 buildPasseport :: [(ByteString, ByteString)] -> Passeport
-buildPasseport = foldl' build multiPass
+buildPasseport = foldl' build lilooMultiPass
   where
-    multiPass = Passeport
-      {byr = 0
-      ,iyr = 0
-      ,eyr = 0
-      ,hgt = NoUnit 0
-      ,hcl = ""
-      ,ecl = ""
-      ,pid = ""
+    lilooMultiPass = Passeport
+      {byr = Nothing
+      ,iyr = Nothing
+      ,eyr = Nothing
+      ,hgt = None
+      ,hcl = Nothing
+      ,ecl = Nothing
+      ,pid = Nothing
       ,cid = Nothing
       ,valid = True
       }
 
     build pp (k, v) =
       case k of
-        "byr" -> pp {byr = v'} -- Int
-        "iyr" -> pp {iyr = v'} -- Int
-        "eyr" -> pp {eyr = v'} -- Int
+        "byr" -> pp {byr = Just v'} -- Int
+        "iyr" -> pp {iyr = Just v'} -- Int
+        "eyr" -> pp {eyr = Just v'} -- Int
         "hgt" -> pp {hgt = parseHgt v} -- Mesure (in inch or centimeter)
-        "hcl" -> pp {hcl = v} -- string
-        "ecl" -> pp {ecl = v} -- string
-        "pid" -> pp {pid = v} -- string of nine digits
+        "hcl" -> pp {hcl = Just v} -- string
+        "ecl" -> pp {ecl = Just v} -- string
+        "pid" -> pp {pid = Just v} -- string of nine digits
         "cid" -> pp {cid = Just v}
         _     -> pp {valid = False}
       where
         v' = fst (fromMaybe errorBuild (BC.readInt v))
-        errorBuild = error ("Error: buildPasseport: field: " <> show k <> ": " <> show v <> " is not an Int")
+        errorBuild = error ("Error: buildPasseport: field: "
+                            <> show k
+                            <> ": "
+                            <> show v
+                            <> " is not an Int"
+                           )
 
 parseHgt :: ByteString -> Height
 parseHgt str =
-  either error
-         id
-         (parseOnly go str)
+  fromRight None (parseOnly go str)
   where
     go :: Parser Height
     go = do
