@@ -17,7 +17,6 @@ import Data.Set qualified as Set
 import Data.Maybe (fromJust)
 import Data.Either (fromRight)
 import Control.Applicative ((<|>))
-import Data.Functor (void)
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as BC
 import Data.Attoparsec.ByteString.Char8
@@ -25,11 +24,9 @@ import Data.Attoparsec.ByteString.Char8
   ,parseOnly
   ,decimal
   ,sepBy1'
-  ,char
   ,string
   ,many1
-  ,satisfy
-  ,endOfLine
+  ,notChar
   ,skipSpace
   )
 
@@ -43,7 +40,11 @@ main = do
   printSolution "Part1" (part1' bags)
 
 
--- we use a recursive function (go).
+-- We start by seaching all bags that contain "shiny gold" bag.
+-- We loop for each such bag, until we there are none left.
+-- What about construct a reverse mapping that says what bags
+-- contain directly (and how many) another one?
+-- We use a recursive function (go).
 part1 :: Bags -> Int
 part1 = go 0 (Set.singleton "shiny gold")
   where
@@ -56,7 +57,8 @@ part1 = go 0 (Set.singleton "shiny gold")
           bags' = Set.foldl' (flip MapS.delete) bags needles
 
 -- An alternative way without writing an explicit recursive
--- function.
+-- function. There is yet another way to do it with until, and
+-- many others I haven't thought of.
 part1' :: Bags -> Int
 part1' bags0 =
   toResult
@@ -72,6 +74,7 @@ part1' bags0 =
          m = length needles'
          bags' = Set.foldl' (flip MapS.delete) bags needles
 
+-- searches all bags which contain bags that are in needles.
 search :: Set Bag -> Bags -> Set Bag
 search needles bags = MapS.foldlWithKey' f Set.empty bags
   where
@@ -90,8 +93,8 @@ printSolution part x = putStrLn (part <> ": " <> show x)
 getDatas :: String -> IO Bags
 getDatas filename = parseDatas <$> BC.readFile filename
 
--- Here the parsing is tough
--- How to parse properly this style of input file
+-- Here the parsing is tough, we found a way to
+-- parse the input but it's cumbersome.
 parseDatas :: ByteString -> Bags
 parseDatas str =
   either error
@@ -99,51 +102,52 @@ parseDatas str =
          (parseOnly parseRecords str)
 
 parseRecords :: Parser Bags
-parseRecords = buildBags <$> sepBy1' parseBag endRecord
+parseRecords = buildBags <$> sepBy1' parseBag (string ".\n")
 
-endRecord :: Parser ()
-endRecord = do
-  void (char '.')
-  void endOfLine
-
--- Here the parsing becomes cumbersome
+-- First we need to exclude the charater '.', since we split on ".\n"
+-- Second, because there is not '.' in the string " contain " we
+-- can't use (sepBy1' (notChar '.') (string " contain ")). So
+-- as last ressort we split on " contain " with splitOn.
+-- Finally we use parseOnly to get the content of the bag.
 parseBag :: Parser (Bag, [Content])
 parseBag = do
-  (bag, rest) <- parseBag'
-  let bags = fromRight [] -- for "no other bags"
-                       (parseOnly (sepBy1' parseContain (string ", "))
-                                  rest)
+  s <- many1 (notChar '.')
+  let xs = splitOn " contain " s
+      (bag, rest) = case xs of
+                      [b, r] -> (toBag b, BC.pack r)
+                      _      -> error "Error: parseBag"
+      bags = parseRest rest
   pure (bag, bags)
 
--- I can't achieve to split the string on " bags contain "
--- with attoparsec. It should exist a way to do it!
-parseBag' :: Parser (Bag, ByteString)
-parseBag' = do
-  s <- many1 (satisfy (\c -> c /= '.' && c /= '\n'))
-  let xs = splitOn " contain " s -- we can also splitOn " bags contain ".
-                                 -- It'll be the same because toBag strips
-                                 -- suffixes " bags" and " bag" or nothing.
-  pure (case xs of
-          [b, r] -> (toBag b, BC.pack r)
-          _      -> error "Error: parseBag'")
+-- Equals to content of the current bag. If we encounter
+-- the string "no other bag", the content is an empty list.
+-- We are not managing directly this case, instead parseContain
+-- only parse a content of the form: a number, a space and
+-- the descrition of a bag (i.e. a string of two words).
+-- So when the parsing fails we return an empty list.
+parseRest :: ByteString -> [Content]
+parseRest str = fromRight  [] (parseOnly parser str)
+  where
+    parser = sepBy1' parseContain (string ", ")
 
 -- We use ", " as separator, so we can't use
 -- (many1 anyChar) to parse the bag. Instead we must use
--- (many1 (satisfy (/= ','))) to say to Attoparsec to stop
+-- (many1 (notChar ',')) to say to Attoparsec to stop
 -- parsing at character ','
 parseContain :: Parser Content
 parseContain = do
   n <- decimal
   skipSpace
-  bag <- many1 (satisfy (/= ','))
+  bag <- many1 (notChar ',')
   pure (toBag bag, n)
-
 
 buildBags :: [(Bag, [Content])] -> Bags
 buildBags = foldl' f MapS.empty
   where
     f acc (b, contained) = MapS.insert b contained acc
 
+-- toBag converts the String to ByteString, and strips
+-- one of these suffix " bags" or " bag", if any.
 toBag :: String -> Bag
 toBag str = fromJust (BC.stripSuffix " bags" str'
                       <|> BC.stripSuffix " bag" str'
