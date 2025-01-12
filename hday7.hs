@@ -40,10 +40,11 @@ type Content = (Bag, Int)
 main :: IO ()
 main = do
   bags <- getDatas "day7.txt"
-  printSolution "Part1" (part1 bags)
+  printSolution "Part1" (part1' bags)
 
 
-part1 :: Map Bag [Content] -> Int
+-- we use a recursive function (go).
+part1 :: Bags -> Int
 part1 = go 0 (Set.singleton "shiny gold")
   where
     go n needles bags
@@ -52,11 +53,24 @@ part1 = go 0 (Set.singleton "shiny gold")
         where
           needles' = search needles bags'
           m = length needles' -- as above
+          bags' = Set.foldl' (flip MapS.delete) bags needles
 
-          bags' = Set.foldl' deleteKey bags needles
-            where
-              deleteKey acc k = MapS.delete k acc
-
+-- An alternative way without writing an explicit recursive
+-- function.
+part1' :: Bags -> Int
+part1' bags0 =
+  toResult
+  . last
+  . takeWhile p
+  $ iterate  f (0, Set.singleton "shiny gold", bags0)
+   where
+     toResult (x, _, _) = x
+     p (_, x, _) = not (null x)
+     f (n, needles, bags) = (n+m, needles', bags')
+       where
+         needles' = search needles bags'
+         m = length needles'
+         bags' = Set.foldl' (flip MapS.delete) bags needles
 
 search :: Set Bag -> Bags -> Set Bag
 search needles bags = MapS.foldlWithKey' f Set.empty bags
