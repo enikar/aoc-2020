@@ -8,14 +8,13 @@
 module Main(main) where
 
 import Data.List (foldl')
-import Data.List.Extra (splitOn)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as MapS
 import Data.Set (Set)
 import Data.Set qualified as Set
 
-import Data.Maybe (fromJust)
-import Data.Either (fromRight)
+import Data.Maybe (fromMaybe)
+import Data.Functor (void)
 import Control.Applicative ((<|>))
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as BC
@@ -25,9 +24,11 @@ import Data.Attoparsec.ByteString.Char8
   ,decimal
   ,sepBy1'
   ,string
-  ,many1
+  ,char
+  ,option
   ,notChar
   ,skipSpace
+  ,manyTill'
   )
 
 type Bags = Map Bag [Content]
@@ -93,64 +94,56 @@ printSolution part x = putStrLn (part <> ": " <> show x)
 getDatas :: String -> IO Bags
 getDatas filename = parseDatas <$> BC.readFile filename
 
--- Here the parsing is tough, we found a way to
--- parse the input but it's cumbersome.
+-- We end up to call parseOnly on each line rather than
+-- to call parseOnly only once and let Attoparsec splits
+-- on ".\n". Anyway, with the preceding code we also had
+-- to call parseOnly on each bag. The parsing is simpler.
 parseDatas :: ByteString -> Bags
-parseDatas str =
-  either error
-         id
-         (parseOnly parseRecords str)
+parseDatas str = foldl' f MapS.empty (BC.lines str)
+  where
+    f acc s = MapS.insert bag content acc
+      where
+        s' = fromMaybe s (BC.stripSuffix "." s)
+        (bag, content) = parseRecord s'
 
-parseRecords :: Parser Bags
-parseRecords = buildBags <$> sepBy1' parseBag (string ".\n")
+-- Parse a line.
+-- Each line is shaped as:
+-- shiny gold bags contain 1 truc machin bag, 2 bidules cheval bags.
+-- or:
+-- truc bidule bags contain no other bags.
+-- The constant strings are " bags contain ", " bags, " or " bag, ",
+-- " bags." or " bag."
+-- A bag can contain no bags, 1 kind of other bag (any amount) or several
+-- king of other bags.
+parseRecord :: ByteString -> (Bag, [Content])
+parseRecord str = either error
+                         id
+                         (parseOnly parseBag str)
 
--- First we need to exclude the charater '.', since we split on ".\n"
--- Second, because there is not '.' in the string " contain " we
--- can't use (sepBy1' (notChar '.') (string " contain ")). So
--- as last ressort we split on " contain " with splitOn.
--- Finally we use parseOnly to get the content of the bag.
+-- Each line is terminated by '.'. But, as usual, we
+-- can't parse (char '.') at the end, if we do the
+-- parsing fails. This is why we strip the ended '.'
+-- before parsing.
+-- We parse until we encounter the
+-- string " bags contain ", to get the bag.
+-- The remainder is its content if any.
+-- We doesn't parse the string "no other bags", instead
+-- we try to parse the content if that fails, we return
+-- the empty list.
 parseBag :: Parser (Bag, [Content])
 parseBag = do
-  s <- many1 (notChar '.')
-  let xs = splitOn " contain " s
-      (bag, rest) = case xs of
-                      [b, r] -> (toBag b, BC.pack r)
-                      _      -> error "Error: parseBag"
-      bags = parseRest rest
-  pure (bag, bags)
-
--- Equals to content of the current bag. If we encounter
--- the string "no other bag", the content is an empty list.
--- We are not managing directly this case, instead parseContain
--- only parse a content of the form: a number, a space and
--- the descrition of a bag (i.e. a string of two words).
--- So when the parsing fails we return an empty list.
-parseRest :: ByteString -> [Content]
-parseRest str = fromRight  [] (parseOnly parser str)
-  where
-    parser = sepBy1' parseContain (string ", ")
+  bag <- manyTill' (notChar '.') (string " bags contain ")
+  bags <- sepBy1' parseContain (string ", ") <|> pure []
+  pure (BC.pack bag, bags)
 
 -- We use ", " as separator, so we can't use
--- (many1 anyChar) to parse the bag. Instead we must use
--- (many1 (notChar ',')) to say to Attoparsec to stop
+-- anyChar to parse the bag. Instead we must use
+-- (notChar ',') to say to Attoparsec to stop
 -- parsing at character ','
 parseContain :: Parser Content
 parseContain = do
   n <- decimal
   skipSpace
-  bag <- many1 (notChar ',')
-  pure (toBag bag, n)
-
-buildBags :: [(Bag, [Content])] -> Bags
-buildBags = foldl' f MapS.empty
-  where
-    f acc (b, contained) = MapS.insert b contained acc
-
--- toBag converts the String to ByteString, and strips
--- one of these suffix " bags" or " bag", if any.
-toBag :: String -> Bag
-toBag str = fromJust (BC.stripSuffix " bags" str'
-                      <|> BC.stripSuffix " bag" str'
-                      <|> Just str')
-  where
-    str' = BC.pack str
+  bag <- manyTill' (notChar ',') (string " bag")
+  void (option 's' (char 's')) -- when there is "bags"
+  pure (BC.pack bag, n)
