@@ -47,26 +47,27 @@ needle :: Bag
 needle = "shiny gold"
 
 part1 :: Bags -> Int
-part1 bags = (length . M.filter (== 1)) (M.foldlWithKey' f M.empty bags)
+part1 bags = fst (M.foldlWithKey' f (0,M.empty) bags)
   where
-    f  visited bag _
-      | bag == needle = visited
-      | otherwise = dfs bags bag visited
+    f  (cnt, visited) bag _
+      | bag == needle = (cnt, visited)
+      | otherwise = (m+cnt, visited')
+        where
+          (m, visited')= dfs bags bag visited
 
-dfs ::  Bags -> Bag -> Visited -> Visited
+dfs ::  Bags -> Bag -> Visited -> (Int, Visited)
 dfs bags bag visited
-  | bag `M.member` visited =  visited
-  | otherwise = go visited (bags ! bag)
+  | bag `M.member` visited =  (visited ! bag, visited)
+  | otherwise = go (0,visited) (bags ! bag)
     where
-      go :: Visited -> [Content] -> Visited
-      go vis []             = M.insert bag 0 vis
-      go vis ((bag',_):cts)
-        | bag' == needle    = M.insert bag 1 vis
-        | n == 1            = M.insert bag 1 vis'
-        | otherwise         = go vis cts
+      go :: (Int, Visited) -> [Content] -> (Int, Visited)
+      go (_,vis) []          = (0,M.insert bag 0 vis)
+      go (_,vis) ((bag',_):cts)
+        | bag' == needle    = (1, M.insert bag 1 vis)
+        | n == 1            = (1, M.insert bag 1 vis')
+        | otherwise         = go (0,vis') cts
           where
-            vis' = dfs bags bag' vis
-            n = vis' ! bag'
+            (n, vis') = dfs bags bag' vis
 
 part2 :: Bags -> Int
 part2 bags = fst (dfs' bags needle M.empty) - 1
