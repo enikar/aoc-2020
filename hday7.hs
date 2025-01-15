@@ -8,14 +8,20 @@
 module Main(main) where
 
 import Data.List (foldl')
-import Data.Map.Strict (Map, (!))
+import Data.Map.Strict
+  (Map
+  ,(!)
+  )
 import Data.Map.Strict qualified as M
 
 import Data.Functor
   (void
   ,($>)
   )
-import Control.Applicative ((<|>))
+import Control.Applicative
+  ((<|>)
+  ,optional
+  )
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as BC
 import Data.Attoparsec.ByteString.Char8
@@ -25,7 +31,6 @@ import Data.Attoparsec.ByteString.Char8
   ,sepBy1'
   ,string
   ,char
-  ,option
   ,notChar
   ,skipSpace
   ,endOfLine
@@ -131,7 +136,7 @@ parseContain = do
   n <- decimal
   skipSpace
   bag <- manyTill' (notChar ',') (string " bag")
-  void (option 's' (char 's')) -- skips an optional 's'
+  void (optional (char 's')) -- skips an optional 's'
   pure (BC.pack bag, n)
 
 buildBags :: [(Bag, [Content])] -> Bags
