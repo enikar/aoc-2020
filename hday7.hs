@@ -1,4 +1,4 @@
--- AoC 2020, day 7, part1
+-- AoC 2020, day 7
 
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ImportQualifiedPost #-}
@@ -41,12 +41,16 @@ main :: IO ()
 main = do
   bags <- getDatas "day7.txt"
   printSolution "Part1" (part1 bags)
+  printSolution "Part2" (part2 bags)
+
+needle :: Bag
+needle = "shiny gold"
 
 part1 :: Bags -> Int
 part1 bags = (length . M.filter (== 1)) (M.foldlWithKey' f M.empty bags)
   where
     f  visited bag _
-      | bag == "shiny gold" = visited
+      | bag == needle = visited
       | otherwise = dfs bags bag visited
 
 dfs ::  Bags -> Bag -> Visited -> Visited
@@ -55,14 +59,27 @@ dfs bags bag visited
   | otherwise = go visited (bags ! bag)
     where
       go :: Visited -> [Content] -> Visited
-      go vis []                = M.insert bag 0 vis
+      go vis []             = M.insert bag 0 vis
       go vis ((bag',_):cts)
-        | bag' == "shiny gold" = M.insert bag 1 vis
-        | n == 1               = M.insert bag 1 vis'
-        | otherwise            = go vis cts
+        | bag' == needle    = M.insert bag 1 vis
+        | n == 1            = M.insert bag 1 vis'
+        | otherwise         = go vis cts
           where
             vis' = dfs bags bag' vis
             n = vis' ! bag'
+
+part2 :: Bags -> Int
+part2 bags = fst (dfs' bags needle M.empty) - 1
+
+dfs' :: Bags -> Bag -> Visited -> (Int, Visited)
+dfs' bags bag visited
+  | bag `M.member` visited = (visited ! bag, visited)
+  | otherwise = go (1, visited) (bags ! bag)
+    where
+      go (m, vis) []                = (m, M.insert bag m vis)
+      go (m, vis) ((bag', n) : cts) = go (m+m'*n, vis') cts
+        where
+          (m', vis') = dfs' bags bag' vis
 
 printSolution :: Show a => String -> a -> IO ()
 printSolution part x = putStrLn (part <> ": " <> show x)
