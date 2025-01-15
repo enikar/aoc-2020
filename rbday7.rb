@@ -41,7 +41,7 @@ def make_rules
   rules
 end
 
-# We use a dfs for part1 and part2, but the same function.
+# We use a dfs for part1 and part2, but not the same function.
 # So this is part1.
 def dfs1(rules, bag, visited)
   return visited[bag] if visited.include?(bag)
