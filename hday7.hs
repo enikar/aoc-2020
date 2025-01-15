@@ -8,10 +8,8 @@
 module Main(main) where
 
 import Data.List (foldl')
-import Data.Map.Strict (Map)
-import Data.Map.Strict qualified as MapS
-import Data.Set (Set)
-import Data.Set qualified as Set
+import Data.Map.Strict (Map, (!))
+import Data.Map.Strict qualified as M
 
 import Data.Functor
   (void
@@ -37,58 +35,34 @@ import Data.Attoparsec.ByteString.Char8
 type Bags = Map Bag [Content]
 type Bag = ByteString
 type Content = (Bag, Int)
+type Visited = Map Bag Int
 
 main :: IO ()
 main = do
   bags <- getDatas "day7.txt"
-  printSolution "Part1" (part1' bags)
+  printSolution "Part1" (part1 bags)
 
-
--- We start by seaching all bags that contain "shiny gold" bag.
--- We loop for each such bag, until we there are none left.
--- What about construct a reverse mapping that says what bags
--- contain directly (and how many) another one?
--- We use a recursive function (go).
 part1 :: Bags -> Int
-part1 = go 0 (Set.singleton "shiny gold")
+part1 bags = (length . M.filter (== 1)) (M.foldlWithKey' f M.empty bags)
   where
-    go n needles bags
-      | null needles = n -- Sets are Foldable
-      | otherwise    = go (n+m) needles' bags'
-        where
-          needles' = search needles bags'
-          m = length needles' -- as above
-          bags' = Set.foldl' (flip MapS.delete) bags needles
+    f  visited bag _
+      | bag == "shiny gold" = visited
+      | otherwise = dfs bags bag visited
 
--- An alternative way without writing an explicit recursive
--- function. There is yet another way to do it with until, and
--- many others I haven't thought of.
-part1' :: Bags -> Int
-part1' bags0 =
-  toResult
-  . last
-  . takeWhile p
-  $ iterate  f (0, Set.singleton "shiny gold", bags0)
-   where
-     toResult (x, _, _) = x
-     p (_, x, _) = not (null x)
-     f (n, needles, bags) = (n+m, needles', bags')
-       where
-         needles' = search needles bags'
-         m = length needles'
-         bags' = Set.foldl' (flip MapS.delete) bags needles
-
--- searches all bags which contain bags that are in needles.
-search :: Set Bag -> Bags -> Set Bag
-search needles bags = MapS.foldlWithKey' f Set.empty bags
-  where
-    f acc k vs = Set.union acc (foldl' g Set.empty vs)
-      where
-        g acc' v = Set.union acc' (Set.foldl' h Set.empty needles)
+dfs ::  Bags -> Bag -> Visited -> Visited
+dfs bags bag visited
+  | bag `M.member` visited =  visited
+  | otherwise = go visited (bags ! bag)
+    where
+      go :: Visited -> [Content] -> Visited
+      go vis []                = M.insert bag 0 vis
+      go vis ((bag',_):cts)
+        | bag' == "shiny gold" = M.insert bag 1 vis
+        | n == 1               = M.insert bag 1 vis'
+        | otherwise            = go vis cts
           where
-            h acc'' needle
-              | needle == fst v = Set.insert k acc''
-              | otherwise       = acc''
+            vis' = dfs bags bag' vis
+            n = vis' ! bag'
 
 printSolution :: Show a => String -> a -> IO ()
 printSolution part x = putStrLn (part <> ": " <> show x)
@@ -143,6 +117,6 @@ parseContain = do
   pure (BC.pack bag, n)
 
 buildBags :: [(Bag, [Content])] -> Bags
-buildBags = foldl' f MapS.empty
+buildBags = foldl' f M.empty
   where
-    f acc (bag, contained) = MapS.insert bag contained acc
+    f acc (bag, contained) = M.insert bag contained acc
