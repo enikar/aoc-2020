@@ -13,27 +13,22 @@ import Data.Map.Strict
   ,(!)
   )
 import Data.Map.Strict qualified as M
+import Data.Word (Word8)
 import Data.Functor
   (void
   ,($>)
   )
-import Control.Applicative
-  ((<|>)
-  ,optional
-  )
+import Control.Monad (when)
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as BC
-import Data.Attoparsec.ByteString.Char8
-  (Parser
-  ,parseOnly
-  ,decimal
-  ,sepBy1'
-  ,string
-  ,char
-  ,notChar
+import Scanner qualified as S
+import Scanner
+  (Scanner
+  ,anyWord8
+  ,scanOnly
   ,skipSpace
-  ,endOfLine
-  ,manyTill'
+  ,lookAhead
+  ,decimal
   )
 
 type Bags = Map Bag [Content]
@@ -104,56 +99,65 @@ dfs2' bags bag = foldl' f 1 (bags ! bag)
 printSolution :: Show a => String -> a -> IO ()
 printSolution part x = putStrLn (part <> ": " <> show x)
 
--- Parsing stuff
 getDatas :: String -> IO Bags
 getDatas filename = parseDatas <$> BC.readFile filename
 
--- Finally, we found a way to parse using parseOnly only once time.
 parseDatas :: ByteString -> Bags
-parseDatas str =
-  either error
-         id
-         (parseOnly parseRecords str)
-
--- The trick is to split on endOfLine, not on ".\n"
-parseRecords :: Parser Bags
-parseRecords = buildBags <$> sepBy1' parseBag endOfLine
-
--- Parses a line.
--- Each line is shaped as:
--- shiny gold bags contain 1 foo bar bag, 2 baz qux bags.
--- or:
--- foo bar bags contain no other bags.
--- The constant strings are " bags contain ", " bags, " or " bag, ",
--- " bags." or " bag."
--- A bag can contain no bags, 1 kind of other bag (any amount) or several
--- king of other bags.
--- Each line ends up with a '.' so we parse it.
-parseBag :: Parser (Bag, [Content])
-parseBag = do
-  bag <- manyTill' (notChar '.') (string " bags contain ")
-  content <- sepBy1' parseContain (string ", ") <|> parseNoOtherBags
-  void (char '.') -- we manage the final '.' here.
-  pure (BC.pack bag, content)
-
--- The other trick is to parse the string "no other bags"
--- explicitly. That way we discard it from the input string.
-parseNoOtherBags :: Parser [Content]
-parseNoOtherBags = string "no other bags" $> []
-
--- We use ", " as separator, so we can't use
--- anyChar to parse the bag. Instead we must use
--- (notChar ',') to say to Attoparsec to stop
--- parsing at character ','
-parseContain :: Parser Content
-parseContain = do
-  n <- decimal
-  skipSpace
-  bag <- manyTill' (notChar ',') (string " bag")
-  void (optional (char 's')) -- skips an optional 's'
-  pure (BC.pack bag, n)
-
-buildBags :: [(Bag, [Content])] -> Bags
-buildBags = foldl' f M.empty
+parseDatas str = foldl' f M.empty (BC.lines str)
   where
-    f acc (bag, contained) = M.insert bag contained acc
+    f acc s = M.insert b c acc
+      where
+        (b, c) = either error
+                        id
+                        (scanOnly parseRecord s)
+
+-- To use word8 instead of Char. It should be faster,
+-- although that doesn't matter here.
+charToWord8 :: Char -> Word8
+charToWord8 = fromIntegral . fromEnum
+
+en, dot, comma, space, es :: Word8
+en = charToWord8 'n'
+dot = charToWord8 '.'
+comma = charToWord8 ','
+space = charToWord8 ' '
+es = charToWord8 's'
+
+parseRecord :: Scanner (Bag, [Content])
+parseRecord = do
+  bag <- parseBag
+  void (S.take 9) -- skips " contain "
+  c <- lookAhead
+  case c of
+    Just  v |v == en -> void (S.take 14) $> (bag, []) -- skips "no other bags."
+    Nothing          -> error "Error: parseRecord" -- should not be reach
+    _                -> do content <- parseContain
+                           pure (bag, content)
+
+parseContain :: Scanner [Content]
+parseContain = do
+  c <- lookAhead
+  case c of
+    Just v
+      |v == dot   -> anyWord8 $> [] -- skip '.', closes the list [Content].
+      |v == comma -> S.take 2 *> parseContain -- skips ", ", parses remaining charaters
+      |otherwise  -> do
+         n <- decimal -- parses the number
+         skipSpace
+         bag <- parseBag -- a bag follows, discard " bag" or " bags"
+         rest <- parseContain -- parses the remaining string
+         pure ((bag, n) : rest)
+    Nothing       -> error "Error: parseContain" -- should not be reached
+
+-- parse a string shaped as "foo bar bag" with an optional 's'
+-- at the end.
+parseBag :: Scanner ByteString
+parseBag = do
+  c1 <- S.takeWhile (/= space) -- parses "foo"
+  skipSpace
+  c2 <- S.takeWhile (/= space) -- parses "bar"
+  skipSpace
+  void (S.take 3) -- skips "bag"
+  c <- lookAhead
+  when (c == Just es) (void anyWord8) -- skips 's' if any
+  pure (BC.unwords [c1, c2]) -- returns "foo bar" as a Scanner
