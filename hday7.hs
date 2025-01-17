@@ -13,7 +13,6 @@ import Data.Map.Strict
   ,(!)
   )
 import Data.Map.Strict qualified as M
-
 import Data.Functor
   (void
   ,($>)
@@ -52,40 +51,39 @@ needle :: Bag
 needle = "shiny gold"
 
 part1 :: Bags -> Int
-part1 bags = (length . M.filter (== 1)) (M.foldlWithKey' f M.empty bags)
+part1 bags = sum  (M.foldlWithKey' f M.empty bags)
   where
     f  visited bag _
       | bag == needle = visited
-      | otherwise = dfs bags bag visited
+      | otherwise = dfs1 bags bag visited
 
-dfs ::  Bags -> Bag -> Visited -> Visited
-dfs bags bag visited
-  | bag `M.member` visited =  visited -- already seen
-  | otherwise = go visited (bags ! bag) -- we walk along current bag's content.
+dfs1 :: Bags -> Bag -> Visited -> Visited
+dfs1 bags bag visited
+  | bag `M.member` visited = visited -- bag is already seen
+    -- we'll walk along current bag's content
+    -- Before we insert the current bag in visited as if doesn't contain needle
+  | otherwise = foldr f (M.insert bag 0 visited) (bags ! bag)
     where
-      go :: Visited -> [Content] -> Visited
-      go vis []             = M.insert bag 0 vis -- needle wasn't found
-      go vis ((bag',_):cts)
-        | bag' == needle    = M.insert bag 1 vis -- needle is in current bag
-        | n == 1            = M.insert bag 1 vis' -- needle is in bag' or in its children
-        | otherwise         = go vis' cts  -- needle wasn't found yet, looking for next bags
+      f (bag', _) vis
+        | bag' == needle = M.insert bag 1 vis -- the needle is in  current bag
+        | n == 1         = M.insert bag 1 vis' -- the needle is in bag' or in  its children
+        | otherwise      = vis' -- the needle wasn't found yet, we'll look for in next bags
           where
-            vis' = dfs bags bag' vis -- We explore in depth first…
+            vis' = dfs1 bags bag' vis -- we are exploring in depth first…
             n = vis' ! bag'
 
 part2 :: Bags -> Int
-part2 bags = fst (dfs' bags needle M.empty) - 1
+part2 bags = fst (dfs2 bags needle M.empty) - 1
 
--- maybe we should use State (and also for dfs).
-dfs' :: Bags -> Bag -> Visited -> (Int, Visited)
-dfs' bags bag visited
+-- How to write dfs2 using State?
+dfs2 :: Bags -> Bag -> Visited -> (Int, Visited)
+dfs2 bags bag visited
   | bag `M.member` visited = (visited ! bag, visited)
-  | otherwise = go (1, visited) (bags ! bag)
-    where
-      go (m, vis) []                = (m, M.insert bag m vis)
-      go (m, vis) ((bag', n) : cts) = go (m+m'*n, vis') cts
-        where
-          (m', vis') = dfs' bags bag' vis
+  | otherwise = foldl' f (1, visited) (bags ! bag)
+      where
+        f (acc, vis) (bag', n)  = (acc + m'* n, vis')
+          where
+            (m', vis') = dfs2 bags bag' vis
 
 printSolution :: Show a => String -> a -> IO ()
 printSolution part x = putStrLn (part <> ": " <> show x)
