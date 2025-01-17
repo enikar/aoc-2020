@@ -55,19 +55,19 @@ part1 bags = sum  (M.foldlWithKey' f M.empty bags)
   where
     f  visited bag _
       | bag == needle = visited
-      | otherwise = dfs1 bags bag visited
+      | otherwise     = dfs1 bags bag visited
 
 dfs1 :: Bags -> Bag -> Visited -> Visited
 dfs1 bags bag visited
   | bag `M.member` visited = visited -- bag is already seen
     -- we'll walk along current bag's content
     -- Before we insert the current bag in visited as if doesn't contain needle
-  | otherwise = foldr f (M.insert bag 0 visited) (bags ! bag)
+  | otherwise              = foldr f (M.insert bag 0 visited) (bags ! bag)
     where
       f (bag', _) vis
-        | bag' == needle = M.insert bag 1 vis -- the needle is in  current bag
-        | n == 1         = M.insert bag 1 vis' -- the needle is in bag' or in  its children
-        | otherwise      = vis' -- the needle wasn't found yet, we'll look for in next bags
+        | bag' == needle = M.insert bag 1 vis -- the needle is in current bag
+        | n == 1         = M.insert bag 1 vis' -- the needle is in bag' or in its children
+        | otherwise      = vis' -- the needle wasn't found yet, we'll look for it in next bags
           where
             vis' = dfs1 bags bag' vis -- we are exploring in depth first…
             n = vis' ! bag'
@@ -75,15 +75,31 @@ dfs1 bags bag visited
 part2 :: Bags -> Int
 part2 bags = fst (dfs2 bags needle M.empty) - 1
 
--- How to write dfs2 using State?
 dfs2 :: Bags -> Bag -> Visited -> (Int, Visited)
 dfs2 bags bag visited
   | bag `M.member` visited = (visited ! bag, visited)
-  | otherwise = foldl' f (1, visited) (bags ! bag)
+  | otherwise              = (m, M.insert bag m visited')
       where
+        (m, visited') = foldl' f (1, visited) (bags ! bag)
+
         f (acc, vis) (bag', n)  = (acc + m'* n, vis')
           where
             (m', vis') = dfs2 bags bag' vis
+
+-- Thanks to a mistake we discovered that part2' is just
+-- as effective as part2, though we don't keep a record of
+-- all visited bags. This must be due the low number of vertices
+-- in the graph.
+part2' :: Bags -> Int
+part2' bags = dfs2' bags needle - 1
+
+dfs2' :: Bags -> Bag ->  Int
+dfs2' bags bag = foldl' f 1 (bags ! bag)
+  where
+    f acc (bag', n) = acc + m'*n
+      where
+        m' = dfs2' bags bag'
+
 
 printSolution :: Show a => String -> a -> IO ()
 printSolution part x = putStrLn (part <> ": " <> show x)
