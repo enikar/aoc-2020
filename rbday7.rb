@@ -5,10 +5,10 @@
 
 require 'strscan'
 
-# Parsing using StrScanner
+# Parsing using StringScanner
 # It's quite slow but it's explicit.
 def parse_bag(ssc)
-  bag = ssc.scan(/\w+ \w+/)
+  bag = ssc.scan(/^\w+ \w+/)
   ssc.skip(' bags contain ')
   [bag, ssc]
 end
@@ -18,9 +18,9 @@ def parse_content(ssc)
   until ssc.eos?
     b = ssc.scan_until(/[,.]/)
     c = StringScanner.new(b)
-    n = c.scan(/\d+/).to_i
+    n = c.scan(/^\d+/).to_i
     c.skip(' ')
-    color = c.scan(/\w+ \w+/)
+    color = c.scan(/^\w+ \w+/)
     content.push([color, n])
     ssc.skip(' ')
   end
