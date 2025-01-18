@@ -34,8 +34,8 @@ type Bags = Map Bag [Content]
 type Bag = ByteString
 type Content = (Bag, Int)
 
-getDatas :: String -> IO Bags
-getDatas filename = parseDatas <$> BC.readFile filename
+getDatas :: IO Bags
+getDatas = parseDatas <$> BC.readFile "day7.txt"
 
 -- Finally, we a way to parse with this method.
 -- Look at parseRecords, parseBag and parseContain.
