@@ -83,7 +83,7 @@ dfs2 bags bag visited
 
 -- Thanks to a mistake we discovered that part2' is just
 -- as effective as part2, though we don't keep a record of
--- all visited bags. This must be due the low number of vertices
+-- all visited bags. This must be due the low number of edges
 -- in the graph.
 part2' :: Bags -> Int
 part2' bags = dfs2' bags needle - 1
@@ -99,17 +99,19 @@ dfs2' bags bag = foldl' f 1 (bags ! bag)
 printSolution :: Show a => String -> a -> IO ()
 printSolution part x = putStrLn (part <> ": " <> show x)
 
+-- Parsing stuff
 getDatas :: String -> IO Bags
 getDatas filename = parseDatas <$> BC.readFile filename
 
+-- we use scanOnly on each line and build Bags incrementally
 parseDatas :: ByteString -> Bags
 parseDatas str = foldl' f M.empty (BC.lines str)
   where
-    f acc s = M.insert b c acc
+    f acc s = M.insert bag content acc
       where
-        (b, c) = either error
-                        id
-                        (scanOnly parseRecord s)
+        (bag, content) = either error
+                                id
+                                (scanOnly parseRecord s)
 
 -- To use word8 instead of Char. It should be faster,
 -- although that doesn't matter here.
@@ -123,17 +125,27 @@ comma = charToWord8 ','
 space = charToWord8 ' '
 es = charToWord8 's'
 
+-- Parses a line.
+-- Each line is shaped as:
+-- shiny gold bags contain 1 foo bar bag, 2 baz qux bags.
+-- or:
+-- foo bar bags contain no other bags.
+-- The constant strings are " bags contain ", " bags, " or " bag, ",
+-- " bags." or " bag."
+-- A bag can contain no bags, 1 kind of other bag (any amount) or several
+-- king of other bags.
 parseRecord :: Scanner (Bag, [Content])
 parseRecord = do
-  bag <- parseBag
+  bag <- parseBag -- first get the bag name
   void (S.take 9) -- skips " contain "
   c <- lookAhead
   case c of
     Just  v |v == en -> void (S.take 14) $> (bag, []) -- skips "no other bags."
-    Nothing          -> error "Error: parseRecord" -- should not be reach
+    Nothing          -> error "Error: parseRecord" -- should not be reached
     _                -> do content <- parseContain
                            pure (bag, content)
 
+-- parse a list of "foo bar bag[s]", separated by a ',' and ended with a '.'
 parseContain :: Scanner [Content]
 parseContain = do
   c <- lookAhead
