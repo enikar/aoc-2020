@@ -18,7 +18,7 @@ main :: IO ()
 main = do
   ds <- map strToInt . lines <$> readFile "day5.txt"
   printSolution "Part1" (maximum ds)
-  printSolution "Part1" (part2' ds)
+  printSolution "Part2" (part2' ds)
 
 -- for part2, first we wrote a recursive function to short-circuit
 -- when we found a missing number in the places list
