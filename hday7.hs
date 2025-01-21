@@ -80,6 +80,8 @@ dfs1 bags bag visited
 
 -- We wrote three version for part2, the first is a naive version
 -- It is written in an imperative style.
+-- In "shiny gold" there are 14177 other bags in, only, 20
+-- different colors!
 part2 :: Bags -> Int
 part2 bags = fst (dfs2 bags needle M.empty) - 1
 
@@ -103,8 +105,9 @@ part2State bags = evalState (dfs2State bags needle) M.empty - 1
 
 -- We could go even further, either by putting Bags in the State or
 -- either by using RWS in place of State.
--- We could simplify by directly returning the value we're looking for
--- but we leave it as is for the sake of generality.
+-- We use two function mutually recursive, dfs2State and dfs2State'
+-- dfs2State updates Visited bags.
+-- dfs2State' walk through the content of bags in depth.
 dfs2State :: Bags -> Bag -> State Visited Int
 dfs2State bags bag = do
   vis <- get
@@ -112,25 +115,20 @@ dfs2State bags bag = do
   put (M.insert bag m visited)
   pure m
 
--- With this version the state of Visited is updated by the foldM.
--- At the end the first bag visited is not in Visited!
--- The final value is still right but doesn't match the Visited bags.
--- It is easy to get around this issue. We can use it as is and
--- add the first bag and the amount of bags at the end. It's what we
--- do in dfs2State
 dfs2State' :: Bags -> Bag -> State Visited Int
 dfs2State' bags bag = do
   visited <- get
-  if bag `M.member` visited
-  then pure (visited ! bag)
+  if bag `M.member` visited -- we've already seen this bag
+  then pure (visited ! bag) -- so we just return its multiplicity
   else let next acc (bag', n) = do
               vis <- get
               -- is there a way to not use runState? I don't know
               -- how else to do it right now.
+              -- Anyway, we look for descendants first
               let (m', vis') = runState (dfs2State bags bag') vis
-              put vis'
-              pure (acc + m'*n)
-
+              put vis' -- update State Visited
+              pure (acc + m'*n) -- return the multiplicity for bag'
+        -- else we visit this bag and its descendants
         in foldM next 1 (bags ! bag)
 
 -- The third version is not a general way to explore a graph.
