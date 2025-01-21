@@ -13,7 +13,10 @@ import Data.Functor
   (void
   ,($>)
   )
-import Control.Applicative ((<|>))
+import Control.Applicative
+  ((<|>)
+  ,optional
+  )
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as BC
 import Data.Attoparsec.ByteString.Char8
@@ -27,7 +30,6 @@ import Data.Attoparsec.ByteString.Char8
   ,string
   ,sepBy1'
   ,manyTill'
-  ,option
   )
 
 type Bags = Map Bag [Content]
@@ -37,7 +39,7 @@ type Content = (Bag, Int)
 getDatas :: IO Bags
 getDatas = parseDatas <$> BC.readFile "day7.txt"
 
--- Finally, we a way to parse with this method.
+-- Finally, we found a way to parse with this method.
 -- Look at parseRecords, parseBag and parseContain.
 parseDatas :: ByteString -> Bags
 parseDatas str =
@@ -81,7 +83,7 @@ parseContain = do
   n <- decimal
   skipSpace
   bag <- manyTill' (notChar ',') (string " bag")
-  void (option 's' (char 's')) -- skip an optional 's'
+  void (optional (char 's')) -- skip an optional 's'
   pure (BC.pack bag, n)
 
 buildBags :: [(Bag, [Content])] -> Bags
