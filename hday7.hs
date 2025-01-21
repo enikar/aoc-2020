@@ -103,14 +103,27 @@ part2State bags = evalState (dfs2State bags needle) M.empty - 1
 
 -- We could go even further, either by putting Bags in the State or
 -- either by using RWS in place of State.
+-- We could simplify by directly returning the value we're looking for
+-- but we leave it as is for the sake of generality.
 dfs2State :: Bags -> Bag -> State Visited Int
 dfs2State bags bag = do
+  vis <- get
+  let (m, visited) = runState (dfs2State' bags bag) vis
+  put (M.insert bag m visited)
+  pure m
+
+-- With this version the state of Visited is updated by the foldM.
+-- At the end the first bag visited is not in Visited!
+-- The final value is still right but doesn't match the Visited bags.
+-- It is easy to get around this issue. We can use it as is and
+-- add the first bag and the amount of bags at the end. It's what we
+-- do in dfs2State
+dfs2State' :: Bags -> Bag -> State Visited Int
+dfs2State' bags bag = do
   visited <- get
   if bag `M.member` visited
   then pure (visited ! bag)
-  else let (m, visited') = runState (foldM next 1 (bags ! bag)) visited
-
-           next acc (bag', n) = do
+  else let next acc (bag', n) = do
               vis <- get
               -- is there a way to not use runState? I don't know
               -- how else to do it right now.
@@ -118,8 +131,7 @@ dfs2State bags bag = do
               put vis'
               pure (acc + m'*n)
 
-        in do put (M.insert bag m visited')
-              pure m
+        in foldM next 1 (bags ! bag)
 
 -- The third version is not a general way to explore a graph.
 -- Thanks to a mistake we discovered that part2' is just
