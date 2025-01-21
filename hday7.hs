@@ -108,15 +108,18 @@ dfs2State bags bag = do
   visited <- get
   if bag `M.member` visited
   then pure (visited ! bag)
-  else let next m (bag', n) = do
+  else let (m, visited') = runState (foldM next 1 (bags ! bag)) visited
+
+           next acc (bag', n) = do
               vis <- get
               -- is there a way to not use runState? I don't know
               -- how else to do it right now.
               let (m', vis') = runState (dfs2State bags bag') vis
               put vis'
-              pure (m + m'*n)
+              pure (acc + m'*n)
 
-       in foldM next 1 (bags ! bag)
+        in do put (M.insert bag m visited')
+              pure m
 
 -- The third version is not a general way to explore a graph.
 -- Thanks to a mistake we discovered that part2' is just
