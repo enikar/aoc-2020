@@ -2,6 +2,7 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE PackageImports #-}
 
 {- HLINT ignore "Eta reduce" -}
 
@@ -18,7 +19,17 @@ import Data.Functor
   (void
   ,($>)
   )
-import Control.Monad (when)
+import Control.Monad
+  (when
+  ,foldM
+  )
+import "mtl" Control.Monad.State.Strict
+  (State
+  ,get
+  ,put
+  ,runState
+  ,evalState
+  )
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as BC
 import Scanner qualified as S
@@ -40,7 +51,7 @@ main :: IO ()
 main = do
   bags <- getDatas "day7.txt"
   printSolution "Part1" (part1 bags)
-  printSolution "Part2" (part2 bags)
+  printSolution "Part2" (part2State bags)
 
 needle :: Bag
 needle = "shiny gold"
@@ -67,6 +78,8 @@ dfs1 bags bag visited
             vis' = dfs1 bags bag' vis -- we are exploring in depth first…
             n = vis' ! bag'
 
+-- We wrote three version for part2, the first is a naive version
+-- It is written in an imperative style.
 part2 :: Bags -> Int
 part2 bags = fst (dfs2 bags needle M.empty) - 1
 
@@ -81,17 +94,41 @@ dfs2 bags bag visited
           where
             (m', vis') = dfs2 bags bag' vis
 
+-- The second version use a State. it avoids the need to
+-- carry on the Visited bags. It needs some improvements, yet.
+-- Probably, we need to write it again from the definition of
+-- a depth first search algorithm.
+part2State :: Bags -> Int
+part2State bags = evalState (dfs2State bags needle) M.empty - 1
+
+-- We could go even further, either by putting Bags in the State or
+-- either by using RWS in place of State.
+dfs2State :: Bags -> Bag -> State Visited Int
+dfs2State bags bag = do
+  visited <- get
+  if bag `M.member` visited
+  then pure (visited ! bag)
+  else let next m (bag', n) = do
+              vis <- get
+              -- is there a way to not use runState? I don't know
+              -- how else to do it right now.
+              let (m', vis') = runState (dfs2State bags bag') vis
+              put vis'
+              pure (m + m'*n)
+
+       in foldM next 1 (bags ! bag)
+
+-- The third version is not a general way to explore a graph.
 -- Thanks to a mistake we discovered that part2' is just
 -- as effective as part2, though we don't keep a record of
--- all visited bags. This must be due the low number of edges
--- in the graph.
+-- all visited bags. It's because the graph is acyclic.
 part2' :: Bags -> Int
 part2' bags = dfs2' bags needle - 1
 
 dfs2' :: Bags -> Bag ->  Int
 dfs2' bags bag = foldl' f 1 (bags ! bag)
   where
-    f acc (bag', n) = acc + m'*n
+    f m (bag', n) = m + m'*n
       where
         m' = dfs2' bags bag'
 
