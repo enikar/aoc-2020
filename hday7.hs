@@ -69,13 +69,13 @@ dfs1 bags bag visited
     -- Before we insert the current bag in visited as if doesn't contain needle
   | otherwise              = foldr f (M.insert bag 0 visited) (bags ! bag)
     where
-      f (bag', _) vis
-        | bag' == needle = M.insert bag 1 vis -- the needle is in current bag
-        | n == 1         = M.insert bag 1 vis' -- the needle is in bag' or in its children
+      f (sub, _) vis
+        | sub == needle = M.insert bag 1 vis -- the needle is in current bag
+        | n == 1         = M.insert bag 1 vis' -- the needle is in sub or in its children
         | otherwise      = vis' -- the needle wasn't found yet, we'll look for it in next bags
           where
-            vis' = dfs1 bags bag' vis -- we are exploring in depth first…
-            n = vis' ! bag'
+            vis' = dfs1 bags sub vis -- we are exploring in depth first…
+            n = vis' ! sub
 
 -- We wrote four versions for part2, the first is a naive version
 -- It is written in an imperative style.
@@ -91,9 +91,9 @@ dfs2 bags bag visited
       where
         (m, visited') = foldl' f (1, visited) (bags ! bag)
 
-        f (acc, vis) (bag', n)  = (acc + m'* n, vis')
+        f (acc, vis) (sub, n)  = (acc + m'* n, vis')
           where
-            (m', vis') = dfs2 bags bag' vis
+            (m', vis') = dfs2 bags sub vis
 
 -- The second version use a State. it avoids the need to
 -- carry on the Visited bags. It needs some improvements, yet.
@@ -109,19 +109,19 @@ part2State bags = evalState (dfs2State bags needle) M.empty - 1
 -- dfs2State' walks through the content of bags in depth.
 dfs2State :: Bags -> Bag -> State Visited Int
 dfs2State bags bag = do
-  m <- dfs2State' bags bag
-  modify' (M.insert bag m)
-  pure m
+  w <- dfs2State' bags bag
+  modify' (M.insert bag w)
+  pure w
 
 -- we name the numbers of bags contained in one bag, its weight.
 dfs2State' :: Bags -> Bag -> State Visited Int
 dfs2State' bags bag = do
   visited <- get
   if bag `M.member` visited -- we've already seen this bag
-  then pure (visited ! bag) -- so we just return its weight
-  else let next acc (bag', n) = do -- There are n bag' in bag
-              m' <- dfs2State bags bag' -- We look for descendant in depth first
-              pure (acc + m'*n) -- return the weight for bag'
+  then pure (visited ! bag) -- so we just return how much its weight in bag
+  else let next acc (sub, n) = do -- There are n sub in bag
+              w <- dfs2State bags sub -- We look for descendant in depth first
+              pure (acc + w*n) -- return the partially computed weight of bag
 
         in -- else we visit bag and its descendants
           foldM next 1 (bags ! bag)
@@ -133,28 +133,30 @@ yaPart2 bags = evalState (yaDfs2 bags needle) M.empty - 1
 
 yaDfs2 :: Bags -> Bag -> State Visited Int
 yaDfs2 bags bag = do
-  m <- yaDfs2' bags bag -- compute the weight for bag
+  w <- yaDfs2' bags bag -- compute the weight for bag
   -- although it's not mandatory in this case
   -- we update Visited with bag and its weight.
-  modify' (M.insert bag m)
-  pure m -- return weight for bag
+  modify' (M.insert bag w)
+  pure w -- return weight for bag
 
 -- it isn't sure that method works in another case of
 -- the present puzzle.
 yaDfs2' :: Bags -> Bag -> State Visited Int
 yaDfs2' bags bag = foldM next 1 (bags ! bag)
   where
-    next acc (bag', n) = do
+    next acc (sub, n) = do -- sub is a bag contained in bag
       vis <- get
-      if bag' `M.member` vis           -- if we've already seen bag'
-      then pure (acc + (vis ! bag')*n) -- we just return its weight
-      else do m' <- yaDfs2' bags bag'  -- else we compute the weight of bag'
-              modify' (M.insert bag' m') -- add bag' to Visited with its weight
-              -- Now we return the weight of bag (argument of yaDfs2')
-              -- We don't update the State Visited right away. Instead we do update it,
-              -- when we return from yaDfs2 at the end or when we return from
-              -- the recursive call in yaDfs2'
-              pure (acc + m'*n)
+      if sub `M.member` vis           -- if we've already seen sub
+      then pure (acc + (vis ! sub)*n) -- we just return how much it weights in bag
+      else do
+        w <- yaDfs2' bags sub    -- else we compute the weight of sub
+        modify' (M.insert sub w) -- add sub to Visited with its weight
+        -- Now we return the partialy computed weight of bag (argument
+        -- of yaDfs2').
+        -- We don't update the State Visited right away. Instead we do
+        -- update it, when we return from yaDfs2 at the end or when we
+        -- return from the recursive call in yaDfs2'
+        pure (acc + w*n)
 
 -- The fourth version is not a general way to explore a graph.
 -- Thanks to a mistake we discovered that part2' is just
@@ -166,9 +168,9 @@ part2' bags = dfs2' bags needle - 1
 dfs2' :: Bags -> Bag ->  Int
 dfs2' bags bag = foldl' f 1 (bags ! bag)
   where
-    f m (bag', n) = m + m'*n
+    f w (sub, n) = w + w'*n
       where
-        m' = dfs2' bags bag'
+        w' = dfs2' bags sub
 
 
 printSolution :: Show a => String -> a -> IO ()
