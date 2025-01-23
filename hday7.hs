@@ -8,7 +8,10 @@
 
 module Main(main) where
 
-import Data.List (foldl')
+import Data.Foldable
+  (foldl'
+  ,foldlM
+  )
 import Data.Map.Strict
   (Map
   ,(!)
@@ -19,10 +22,7 @@ import Data.Functor
   (void
   ,($>)
   )
-import Control.Monad
-  (when
-  ,foldM
-  )
+import Control.Monad (when)
 import "mtl" Control.Monad.State.Strict
   (State
   ,get
@@ -69,7 +69,7 @@ dfs1 bags bag visited
     -- Before we insert the current bag in visited as if doesn't contain needle
   | otherwise              = foldr f (M.insert bag 0 visited) (bags ! bag)
     where
-      f (sub, _) vis
+      f (sub, _n) vis
         | sub == needle = M.insert bag 1 vis -- the needle is in current bag
         | n == 1         = M.insert bag 1 vis' -- the needle is in sub or in its children
         | otherwise      = vis' -- the needle wasn't found yet, we'll look for it in next bags
@@ -124,7 +124,7 @@ dfs2State' bags bag = do
               pure (acc + w*n) -- return the partially computed weight of bag
 
         in -- else we visit bag and its descendants
-          foldM next 1 (bags ! bag)
+          foldlM next 1 (bags ! bag)
 
 -- The third version is a rewrite of dfs2state that doesn't use
 -- two mutually recursive functions but only one recursive function.
@@ -142,7 +142,7 @@ yaDfs2 bags bag = do
 -- it isn't sure that method works in another case of
 -- the present puzzle.
 yaDfs2' :: Bags -> Bag -> State Visited Int
-yaDfs2' bags bag = foldM next 1 (bags ! bag)
+yaDfs2' bags bag = foldlM next 1 (bags ! bag)
   where
     next acc (sub, n) = do -- sub is a bag contained in bag
       vis <- get
