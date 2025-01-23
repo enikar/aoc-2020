@@ -104,9 +104,9 @@ part2State bags = evalState (dfs2State bags needle) M.empty - 1
 
 -- We could go even further, either by putting Bags in the State or
 -- either by using RWS in place of State.
--- We use two function mutually recursive, dfs2State and dfs2State'
+-- We use two mutually recursive functions, dfs2State and dfs2State'
 -- dfs2State updates Visited bags.
--- dfs2State' walk through the content of bags in depth.
+-- dfs2State' walks through the content of bags in depth.
 dfs2State :: Bags -> Bag -> State Visited Int
 dfs2State bags bag = do
   m <- dfs2State' bags bag
@@ -146,9 +146,9 @@ yaDfs2' bags bag = foldM next 1 (bags ! bag)
   where
     next acc (bag', n) = do
       vis <- get
-      if bag' `M.member` vis
-      then pure (acc + (vis ! bag')*n) -- already seen bag', we just return its weight
-      else do m' <- yaDfs2' bags bag'
+      if bag' `M.member` vis           -- if we've already seen bag'
+      then pure (acc + (vis ! bag')*n) -- we just return its weight
+      else do m' <- yaDfs2' bags bag'  -- else we compute the weight of bag'
               modify' (M.insert bag' m') -- add bag' to Visited with its weight
               -- Now we return the weight of bag (argument of yaDfs2')
               -- We don't update the State Visited right away. Instead we do update it,
