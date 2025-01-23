@@ -26,8 +26,7 @@ import Control.Monad
 import "mtl" Control.Monad.State.Strict
   (State
   ,get
-  ,put
-  ,runState
+  ,modify'
   ,evalState
   )
 import Data.ByteString (ByteString)
@@ -51,15 +50,15 @@ main :: IO ()
 main = do
   bags <- getDatas "day7.txt"
   printSolution "Part1" (part1 bags)
-  printSolution "Part2" (part2State bags)
+  printSolution "Part2" (yaPart2 bags)
 
 needle :: Bag
 needle = "shiny gold"
 
 part1 :: Bags -> Int
-part1 bags = sum  (M.foldlWithKey' f M.empty bags)
+part1 bags = sum  (foldl' f M.empty (M.keys bags))
   where
-    f  visited bag _
+    f  visited bag
       | bag == needle = visited
       | otherwise     = dfs1 bags bag visited
 
@@ -78,10 +77,10 @@ dfs1 bags bag visited
             vis' = dfs1 bags bag' vis -- we are exploring in depth first…
             n = vis' ! bag'
 
--- We wrote three version for part2, the first is a naive version
+-- We wrote four versions for part2, the first is a naive version
 -- It is written in an imperative style.
 -- In "shiny gold" there are 14177 other bags in, only, 20
--- different colors!
+-- different bags!
 part2 :: Bags -> Int
 part2 bags = fst (dfs2 bags needle M.empty) - 1
 
@@ -110,28 +109,54 @@ part2State bags = evalState (dfs2State bags needle) M.empty - 1
 -- dfs2State' walk through the content of bags in depth.
 dfs2State :: Bags -> Bag -> State Visited Int
 dfs2State bags bag = do
-  vis <- get
-  let (m, visited) = runState (dfs2State' bags bag) vis
-  put (M.insert bag m visited)
+  m <- dfs2State' bags bag
+  modify' (M.insert bag m)
   pure m
 
+-- we name the numbers of bags contained in one bag, its weight.
 dfs2State' :: Bags -> Bag -> State Visited Int
 dfs2State' bags bag = do
   visited <- get
   if bag `M.member` visited -- we've already seen this bag
-  then pure (visited ! bag) -- so we just return its multiplicity
-  else let next acc (bag', n) = do
-              vis <- get
-              -- is there a way to not use runState? I don't know
-              -- how else to do it right now.
-              -- Anyway, we look for descendants first
-              let (m', vis') = runState (dfs2State bags bag') vis
-              put vis' -- update State Visited
-              pure (acc + m'*n) -- return the multiplicity for bag'
-        -- else we visit this bag and its descendants
-        in foldM next 1 (bags ! bag)
+  then pure (visited ! bag) -- so we just return its weight
+  else let next acc (bag', n) = do -- There are n bag' in bag
+              m' <- dfs2State bags bag' -- We look for descendant in depth first
+              pure (acc + m'*n) -- return the weight for bag'
 
--- The third version is not a general way to explore a graph.
+        in -- else we visit bag and its descendants
+          foldM next 1 (bags ! bag)
+
+-- The third version is a rewrite of dfs2state that doesn't use
+-- two mutually recursive functions but only one recursive function.
+yaPart2 :: Bags -> Int
+yaPart2 bags = evalState (yaDfs2 bags needle) M.empty - 1
+
+yaDfs2 :: Bags -> Bag -> State Visited Int
+yaDfs2 bags bag = do
+  m <- yaDfs2' bags bag -- compute the weight for bag
+  -- although it's not mandatory in this case
+  -- we update Visited with bag and its weight.
+  modify' (M.insert bag m)
+  pure m -- return weight for bag
+
+-- it isn't sure that method works in another case of
+-- the present puzzle.
+yaDfs2' :: Bags -> Bag -> State Visited Int
+yaDfs2' bags bag = foldM next 1 (bags ! bag)
+  where
+    next acc (bag', n) = do
+      vis <- get
+      if bag' `M.member` vis
+      then pure (acc + (vis ! bag')*n) -- already seen bag', we just return its weight
+      else do m' <- yaDfs2' bags bag'
+              modify' (M.insert bag' m') -- add bag' to Visited with its weight
+              -- Now we return the weight of bag (argument of yaDfs2')
+              -- We don't update the State Visited right away. Instead we do update it,
+              -- when we return from yaDfs2 at the end or when we return from
+              -- the recursive call in yaDfs2'
+              pure (acc + m'*n)
+
+-- The fourth version is not a general way to explore a graph.
 -- Thanks to a mistake we discovered that part2' is just
 -- as effective as part2, though we don't keep a record of
 -- all visited bags. It's because the graph is acyclic.
