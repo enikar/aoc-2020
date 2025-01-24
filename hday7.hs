@@ -118,7 +118,7 @@ dfs2State' :: Bags -> Bag -> State Visited Int
 dfs2State' bags bag = do
   visited <- get
   if bag `M.member` visited -- we've already seen this bag
-  then pure (visited ! bag) -- so we just return how much its weight in bag
+  then pure (visited ! bag) -- so we just return how much it weights.
   else let next acc (sub, n) = do -- There are n sub in bag
               w <- dfs2State bags sub -- We look for descendant in depth first
               pure (acc + w*n) -- return the partially computed weight of bag
@@ -147,15 +147,15 @@ yaDfs2' bags bag = foldlM next 1 (bags ! bag)
     next acc (sub, n) = do -- sub is a bag contained in bag
       vis <- get
       if sub `M.member` vis           -- if we've already seen sub
-      then pure (acc + (vis ! sub)*n) -- we just return how much it weights in bag
+      then pure (acc + (vis ! sub)*n) -- we just return how much it weights.
       else do
         w <- yaDfs2' bags sub    -- else we compute the weight of sub
         modify' (M.insert sub w) -- add sub to Visited with its weight
-        -- Now we return the partialy computed weight of bag (argument
-        -- of yaDfs2').
-        -- We don't update the State Visited right away. Instead we do
-        -- update it, when we return from yaDfs2 at the end or when we
-        -- return from the recursive call in yaDfs2'
+        -- Now we accumulate the partially computed weight of bag
+        -- (argument of yaDfs2').
+        -- So, we don't update the State Visited right away. Instead we
+        -- do update it, when we return from yaDfs2 at the end or when
+        -- we return from the recursive call in yaDfs2'
         pure (acc + w*n)
 
 -- The fourth version is not a general way to explore a graph.
