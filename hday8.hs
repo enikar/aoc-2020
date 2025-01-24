@@ -36,7 +36,7 @@ data Machine = Machine
   ,pc :: Int
   ,accumulator :: Int
   ,state :: MachineState
-  }
+  } deriving (Show)
 
 -- The state of the machine.
 data MachineState = End
