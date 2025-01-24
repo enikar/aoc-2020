@@ -3,7 +3,6 @@
 -- Not a good code but it works.
 
 {-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE LambdaCase #-}
 
 {- HLINT ignore "Eta reduce" -}
 
@@ -34,18 +33,20 @@ type Program = Array Int Instr
 --  the current program counter
 --  the value of the accumulator
 -- and its state
+-- TODO: put the visited porgram counter in Machine
 data Machine = Machine
   {memoryBounds :: (Int, Int)
   ,pc :: Int
   ,accumulator :: Int
   ,state :: MachineState
+  ,visited :: IntSet
   } deriving (Show)
 
 -- The state of the machine.
 data MachineState = End
                   |Loop
                   |Cont
-                  |Out deriving (Show, Eq)
+                  |Out deriving (Show)
 
 getDatas :: String -> IO Program
 getDatas filename = do
@@ -74,90 +75,83 @@ printSolution part x = putStrLn (part <> ": " <> show x)
 main :: IO ()
 main = do
   instrs <- getDatas "day8.txt"
-  let machine = Machine (Array.bounds instrs) 0 0 Cont
+  let machine = Machine (Array.bounds instrs) 0 0 Cont (S.singleton 0)
   printSolution "Part1" (part1 instrs machine)
   printSolution "Part2" (part2 instrs machine)
 
 -- part1 is straightforward. We step until we encounter
 -- an already seen program counter.
 part1 :: Program -> Machine -> Int
-part1 instrs machine = go (S.singleton 0) machine
+part1 instrs machine = go machine
   where
-    go visited m = case state m' of
-                 Loop -> accumulator m'
-                 Cont -> go (S.insert pc' visited) m'
-                 _    -> error "Error: part1: End or Out!" -- should not be reached
-        where
-          m' = step instrs visited m
-          pc' = pc m'
+    go m = case state m' of
+             Loop -> accumulator m' -- we reach the goal
+             Cont -> go m'' -- we need to go further
+             _    -> error "Error: part1: End or Out!" -- should not be reached
+      where
+        m' = step instrs m
+        pc' = pc m'
+        m'' = m' {visited = S.insert pc' (visited m')}
 
 -- part2 is more complex. We need to change one instruction, a Nop to
 -- a Jmp or a Jmp to a Nop and test if the program run to the end.
--- We run the program and test the next susbtition each time
--- the program loops or run out of range.
--- This code is quite complex.
+-- We run the program and check the next susbtition each time the
+-- program loops or runs out of range.
 part2 :: Program -> Machine -> Int
 part2 instrs machine = loop f (jmpOrNops instrs)
   where
     subst instr = instrs // [instr]
 
     f [] = error "Error; part2: no solution" -- should not be reached
-    f (instr:rest) = go (subst instr) (S.singleton 0) machine
+    f (instr:rest) = go (subst instr) machine
       where
-        go instrs' visited m =
-          let machine' = step instrs' visited m
+        go instrs' m =
+          let machine' = step instrs' m
               pc' = pc machine'
+              machine'' = machine' {visited = S.insert pc' (visited machine')}
           in case state machine' of
-              End  -> Right (accumulator machine')
-              Cont -> go instrs' (S.insert pc' visited) machine'
-              _    -> Left rest -- Loop or Out
+              End  -> Right (accumulator machine') -- we reach the goal
+              Cont -> go instrs' machine''         -- we continue to run the programm
+              _    -> Left rest -- Loop or Out, we'are going to test the next substitution
 
--- filter all Jmp and Nop, changing Jmp to Nop and vice versa.
+-- Filters all Jmp and Nop, changing Jmp to Nop and vice versa.
 jmpOrNops :: Program -> [(Int, Instr)]
 jmpOrNops instrs = foldr g [] (Array.assocs instrs)
   where
-     g (i, instr) acc
-           | jmpOrNop instr = (i, instr') : acc
-           | otherwise      = acc
-             where
-               instr' = case instr of
-                 Jmp j -> Nop j
-                 Nop j -> Jmp j
-                 _     -> error "Error: jmpOrNots" -- should not be reached
-
-jmpOrNop :: Instr -> Bool
-jmpOrNop = \case
-  Jmp _ -> True
-  Nop _ -> True
-  _     -> False
+     g (i, instr) acc =
+       case instr of
+         Jmp j -> (i, Nop j) : acc
+         Nop j -> (i, Jmp j) : acc
+         _     -> acc
 
 -- Steps one instruction, calculates the next program counter,
 -- updates the accumulator and update the state of the machine:
 -- Cont: we can go further
 -- End: we reach the end the program: the program counter is
---      exactly one + the maximum of the program
+--      exactly one + the maximum of the program counter.
 -- Loop: the program counter returns to an already visited value
 -- Out: the program counter is out of range of the program
-step :: Program -> IntSet -> Machine -> Machine
-step instrs visited machine =
+step :: Program -> Machine -> Machine
+step instrs machine =
   let pc' = pc machine
       pcNext = pc'+1
   in case instrs ! pc' of
-    Nop _ -> machine {state = machineState visited pcNext machine
+    Nop _ -> machine {state = machineState pcNext machine
                      ,pc = pcNext}
-    Acc x -> machine {state = machineState visited pcNext machine
+    Acc x -> machine {state = machineState pcNext machine
                      ,pc = pcNext
                      ,accumulator = accumulator machine + x}
     Jmp x -> let pc'' = pc' + x
-             in machine {state = machineState visited pc'' machine
+             in machine {state = machineState pc'' machine
                         ,pc = pc''}
 
 -- Determines the state of the machine.
-machineState :: IntSet -> Int-> Machine -> MachineState
-machineState visited pc' machine
-  | pc' `S.member` visited = Loop
+machineState :: Int-> Machine -> MachineState
+machineState pc' machine
+  | pc' `S.member` vis = Loop
   | pc' == sup + 1 = End
   | not (inRange (inf, sup) pc') = Out
   | otherwise     = Cont
     where
+      vis = visited machine
       (inf, sup) = memoryBounds machine
