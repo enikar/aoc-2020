@@ -23,8 +23,11 @@ import Data.IntSet (IntSet)
 import Data.IntSet qualified as S
 import Control.Monad.Extra (loop)
 
-data Instr = Nop Int | Acc Int | Jmp Int deriving (Show)
-type Instructions = Array Int Instr
+data Instr = Nop Int
+           |Acc Int
+           |Jmp Int deriving (Show)
+
+type Program = Array Int Instr
 
 -- The machine consist of;
 --  bounds of the program
@@ -44,7 +47,7 @@ data MachineState = End
                   |Cont
                   |Out deriving (Show, Eq)
 
-getDatas :: String -> IO Instructions
+getDatas :: String -> IO Program
 getDatas filename = do
   instrs <- map parseInstr . lines <$> readFile' filename
   pure (Array.listArray (0, length instrs - 1) instrs)
@@ -52,7 +55,7 @@ getDatas filename = do
 readInt :: String -> Int
 readInt s = fromMaybe errReadInt (readMaybe s')
   where
-    -- what a shame, read can't parse number prefix with '+'
+    -- what a shame, read can't parse an Int prefix with '+'
     s' |head s == '+' = tail s
        |otherwise     = s
     errReadInt = error ("Error: readInt: can't parse an Int: " <> s)
@@ -77,7 +80,7 @@ main = do
 
 -- part1 is straightforward. We step until we encounter
 -- an already seen program counter.
-part1 :: Instructions -> Machine -> Int
+part1 :: Program -> Machine -> Int
 part1 instrs machine = go (S.singleton 0) machine
   where
     go visited m = case state m' of
@@ -93,12 +96,12 @@ part1 instrs machine = go (S.singleton 0) machine
 -- We run the program and test the next susbtition each time
 -- the program loops or run out of range.
 -- This code is quite complex.
-part2 :: Instructions -> Machine -> Int
+part2 :: Program -> Machine -> Int
 part2 instrs machine = loop f (jmpOrNops instrs)
   where
     subst instr = instrs // [instr]
 
-    f [] = error "Error; part2: no solution"
+    f [] = error "Error; part2: no solution" -- should not be reached
     f (instr:rest) = go (subst instr) (S.singleton 0) machine
       where
         go instrs' visited m =
@@ -110,7 +113,7 @@ part2 instrs machine = loop f (jmpOrNops instrs)
               _    -> Left rest -- Loop or Out
 
 -- filter all Jmp and Nop, changing Jmp to Nop and vice versa.
-jmpOrNops :: Instructions -> [(Int, Instr)]
+jmpOrNops :: Program -> [(Int, Instr)]
 jmpOrNops instrs = foldr g [] (Array.assocs instrs)
   where
      g (i, instr) acc
@@ -135,13 +138,14 @@ jmpOrNop = \case
 --      exactly one + the maximum of the program
 -- Loop: the program counter returns to an already visited value
 -- Out: the program counter is out of range of the program
-step :: Instructions -> IntSet -> Machine -> Machine
+step :: Program -> IntSet -> Machine -> Machine
 step instrs visited machine =
   let pc' = pc machine
       pcNext = pc'+1
   in case instrs ! pc' of
-    Nop _ -> machine {state = machineState visited pcNext machine, pc = pcNext}
-    Acc x -> machine {state =machineState visited pcNext machine
+    Nop _ -> machine {state = machineState visited pcNext machine
+                     ,pc = pcNext}
+    Acc x -> machine {state = machineState visited pcNext machine
                      ,pc = pcNext
                      ,accumulator = accumulator machine + x}
     Jmp x -> let pc'' = pc' + x
