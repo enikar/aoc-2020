@@ -28,12 +28,12 @@ data Instr = Nop Int
 
 type Program = Array Int Instr
 
--- The machine consist of;
+-- The machine consist of:
 --  bounds of the program
 --  the current program counter
 --  the value of the accumulator
--- and its state
--- TODO: put the visited porgram counter in Machine
+--  its state
+--  the visited position of program counter.
 data Machine = Machine
   {memoryBounds :: (Int, Int)
   ,pc :: Int
@@ -56,7 +56,7 @@ getDatas filename = do
 readInt :: String -> Int
 readInt s = fromMaybe errReadInt (readMaybe s')
   where
-    -- what a shame, read can't parse an Int prefix with '+'
+    -- what a shame, read can't parse an Int prefixed with '+'
     s' |head s == '+' = tail s
        |otherwise     = s
     errReadInt = error ("Error: readInt: can't parse an Int: " <> s)
