@@ -102,7 +102,7 @@ part2 instrs machine = loop f (jmpOrNops instrs)
   where
     subst instr = instrs // [instr]
 
-    f [] = error "Error; part2: no solution" -- should not be reached
+    f [] = error "Error: part2: no solution" -- should not be reached
     f (instr:rest) = go (subst instr) machine
       where
         go instrs' m =
