@@ -32,7 +32,6 @@ type Program = Array Int Instr
 --  bounds of the program
 --  the current program counter
 --  the value of the accumulator
---  its state
 --  the visited position of program counter.
 data Machine = Machine
   {memoryBounds :: (Int, Int)
@@ -99,10 +98,10 @@ part1 instrs machine = run machine
 part2 :: Program -> Machine -> Int
 part2 instrs machine = loop search (jmpOrNops instrs)
   where
-    subst instr = instrs // [instr]
+    substitute instr = instrs // [instr]
 
     search [] = error "Error: part2: no solution" -- should not be reached
-    search (instr:rest) = run (subst instr) machine
+    search (instr:rest) = run (substitute instr) machine
       where
         run instrs' m =
           let machine' = step instrs' m
@@ -124,12 +123,9 @@ jmpOrNops instrs = foldr g [] (Array.assocs instrs)
          _     -> acc
 
 -- Steps one instruction, calculates the next program counter,
--- updates the accumulator and update the state of the machine:
--- Cont: we can go further
--- End: we reach the end the program: the program counter is
---      exactly one + the maximum of the program counter.
--- Loop: the program counter returns to an already visited value
--- Out: the program counter is out of range of the program
+-- and updates the accumulator.
+-- We assume that the MachineState is neither Out nor End, else
+-- the program crashes with an out of bound.
 step :: Program -> Machine -> Machine
 step instrs machine =
   let pc' = pc machine
@@ -141,6 +137,11 @@ step instrs machine =
     Jmp x -> machine {pc = pc' + x}
 
 -- Determines the state of the machine.
+--   Cont: we can go further
+--   End: we reach the end the program: the program counter is
+--        exactly one + the maximum of the program counter.
+--   Loop: the program counter returns to an already visited value
+--   Out: the program counter is out of range of the program
 machineState ::  Machine -> MachineState
 machineState machine
   | pc' `S.member` vis           = Loop
