@@ -38,7 +38,6 @@ data Machine = Machine
   {memoryBounds :: (Int, Int)
   ,pc :: Int
   ,accumulator :: Int
-  ,state :: MachineState
   ,visited :: IntSet
   } deriving (Show)
 
@@ -75,18 +74,18 @@ printSolution part x = putStrLn (part <> ": " <> show x)
 main :: IO ()
 main = do
   instrs <- getDatas "day8.txt"
-  let machine = Machine (Array.bounds instrs) 0 0 Cont (S.singleton 0)
+  let machine = Machine (Array.bounds instrs) 0 0 (S.singleton 0)
   printSolution "Part1" (part1 instrs machine)
   printSolution "Part2" (part2 instrs machine)
 
 -- part1 is straightforward. We step until we encounter
 -- an already seen program counter.
 part1 :: Program -> Machine -> Int
-part1 instrs machine = go machine
+part1 instrs machine = run machine
   where
-    go m = case state m' of
+    run m = case  machineState m' of
              Loop -> accumulator m' -- we reach the goal
-             Cont -> go m'' -- we need to go further
+             Cont -> run m'' -- we need to go further
              _    -> error "Error: part1: End or Out!" -- should not be reached
       where
         m' = step instrs m
@@ -98,21 +97,21 @@ part1 instrs machine = go machine
 -- We run the program and check the next susbtition each time the
 -- program loops or runs out of range.
 part2 :: Program -> Machine -> Int
-part2 instrs machine = loop f (jmpOrNops instrs)
+part2 instrs machine = loop search (jmpOrNops instrs)
   where
     subst instr = instrs // [instr]
 
-    f [] = error "Error: part2: no solution" -- should not be reached
-    f (instr:rest) = go (subst instr) machine
+    search [] = error "Error: part2: no solution" -- should not be reached
+    search (instr:rest) = run (subst instr) machine
       where
-        go instrs' m =
+        run instrs' m =
           let machine' = step instrs' m
               pc' = pc machine'
               machine'' = machine' {visited = S.insert pc' (visited machine')}
-          in case state machine' of
+          in case machineState machine' of
               End  -> Right (accumulator machine') -- we reach the goal
-              Cont -> go instrs' machine''         -- we continue to run the programm
-              _    -> Left rest -- Loop or Out, we'are going to test the next substitution
+              Cont -> run instrs' machine''        -- we continue to run the programm
+              _    -> Left rest -- Loop or Out, we're going to check the next substitution
 
 -- Filters all Jmp and Nop, changing Jmp to Nop and vice versa.
 jmpOrNops :: Program -> [(Int, Instr)]
@@ -136,22 +135,19 @@ step instrs machine =
   let pc' = pc machine
       pcNext = pc'+1
   in case instrs ! pc' of
-    Nop _ -> machine {state = machineState pcNext machine
-                     ,pc = pcNext}
-    Acc x -> machine {state = machineState pcNext machine
-                     ,pc = pcNext
+    Nop _ -> machine {pc = pcNext}
+    Acc x -> machine {pc = pcNext
                      ,accumulator = accumulator machine + x}
-    Jmp x -> let pc'' = pc' + x
-             in machine {state = machineState pc'' machine
-                        ,pc = pc''}
+    Jmp x -> machine {pc = pc' + x}
 
 -- Determines the state of the machine.
-machineState :: Int-> Machine -> MachineState
-machineState pc' machine
-  | pc' `S.member` vis = Loop
-  | pc' == sup + 1 = End
+machineState ::  Machine -> MachineState
+machineState machine
+  | pc' `S.member` vis           = Loop
+  | pc' == sup + 1               = End
   | not (inRange (inf, sup) pc') = Out
-  | otherwise     = Cont
+  | otherwise                    = Cont
     where
+      pc' = pc machine
       vis = visited machine
       (inf, sup) = memoryBounds machine
