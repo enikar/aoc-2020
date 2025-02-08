@@ -49,7 +49,7 @@ part1 nums = go 0
             x = nums ! (n + 25) -- get the following element
             pairs = combinationsOpt 2 vec -- compute combinations of pairs
         in case find ((==x) . sum) pairs of
-          Nothing -> Just x -- v is not the sum of two elements in the 25 previous elements.
+          Nothing -> Just x -- x is not the sum of two elements in the 25 previous elements.
           Just _  -> go (n+1) -- We need to go further
 
 -- alternative version using foldr. This is a bit slower.
@@ -82,27 +82,44 @@ combinationsOpt k vec
                  consComb i = vec ! i : comb
 
 
--- For part2 we wrote two recursive function to loop.
--- It's not a haskelly version… I wonder how to write it to not
--- have explicit recursives functions and to keep efficiency.
+-- Maybe it should be better to use Data.Sequence.
+-- We named the consecutive values from index n to index m (n <= m)
+-- a sequence.
+-- For part2 we use a function with these arguments:
+--    - the index of the begining of the sequence: named n
+--    - the index of the end of the sequence: named m
+--    - the value of the sum of elements from begigining to the end:
+--      named acc
+
+-- We escape with Nothing when the index of the end becomes greater than the last
+-- index of the vector.
+
+-- We try to add the value at index m to the sum:
+--   - if the sum is inferior than the searched value, we go further to try
+--     to add at index (m+1)
+--   - if the new sum is equal to the searched to the value, then we reach our goal.
+--   - else the sum became greater than the searched value, then we try to start at (n+1)
+--     instead, updating the new sum by subtracting the value at index n from the sum
 part2 :: Maybe Int -> Vector Int -> Maybe Int
-part2 Nothing     _   = Nothing
-part2 (Just val) nums = go 0
+part2 Nothing _       = Nothing
+part2 (Just val) nums = go 0 0 0
   where
     sup = V.length nums - 1
 
-    go n
-      | n > sup   = Nothing
-      | otherwise = case go' n 0 of
-                      Nothing -> go (n+1)
-                      Just m  -> let vec = V.slice n (m-n+1) nums
-                                     mini = V.minimum vec
-                                     maxi = V.maximum vec
-                                 in Just (mini + maxi)
+    -- n is the first index of the sequence
+    -- m is the last index of the sequence
+    -- acc is the sum of values of the sequence from n to m.
+    go :: Int -> Int -> Int -> Maybe Int
+    go n m acc
+      | m > sup     = Nothing
+      | acc' < val  = go n (m+1) acc' -- go further
+      | acc' == val = Just (mini+maxi) -- reach the goal
+      | otherwise   = go (n+1) m acc'' -- acc' > val, start at (n+1)
       where
-        go' m acc
-          | acc' == val = Just m -- We found the rigth range [n..m]
-          | acc' > val  = Nothing -- The solution  was not in range [n..m]
-          | otherwise   = go' (m+1) acc' -- We need to go further
-          where
-            acc' = acc + nums ! m
+        acc' = acc + nums ! m
+
+        vec = V.slice n (m-n+1) nums
+        mini = V.minimum vec
+        maxi = V.maximum vec
+
+        acc'' = acc - nums ! n
