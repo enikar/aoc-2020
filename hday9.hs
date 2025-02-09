@@ -35,7 +35,7 @@ main = do
   printSolution "Part2" (part2 mx datas)
 
 -- For part1 we shift a "window" of 25 consecutive elments in the vector.
--- We check if a combination of pair among these elements can sum to the
+-- We check if a combination by pair among these elements can sum to the
 -- next element following immediately the 25 consecutive elements.
 -- We use indices to acces vector's elments, it is faster.
 part1 :: Vector Int -> Maybe Int
@@ -83,11 +83,11 @@ combinationsOpt k vec
 
 
 -- Maybe it should be better to use Data.Sequence.
--- We named the consecutive values from index n to index m (n <= m)
+-- We named the consecutive values from index n to index m (n < m)
 -- a sequence.
 -- For part2 we use a function with these arguments:
 --    - the index of the begining of the sequence: named n
---    - the index of the end of the sequence: named m
+--    - the index of the end+1 of the sequence: named m
 --    - the value of the sum of elements from begigining to the end:
 --      named acc
 
@@ -96,23 +96,24 @@ combinationsOpt k vec
 
 -- We try to add the value at index m to the sum:
 --   - if the sum is inferior than the searched value, we go further to try
---     to add at index (m+1)
---   - if the new sum is equal to the searched to the value, then we reach our goal.
+--     with index (m+1)
+--   - if the new sum is equal to the searched value, then we reach our goal.
 --   - else the sum became greater than the searched value, then we try to start at (n+1)
 --     instead, updating the new sum by subtracting the value at index n from the sum
 part2 :: Maybe Int -> Vector Int -> Maybe Int
 part2 Nothing _       = Nothing
-part2 (Just val) nums = go 0 0 0
+part2 (Just val) nums = go 0 0 0 -- start with an empty sequence (from 0 to -1),
+                                 -- the sum is equalt to 0
   where
     sup = V.length nums - 1
 
     -- n is the first index of the sequence
-    -- m is the last index of the sequence
-    -- acc is the sum of values of the sequence from n to m.
+    -- m-1 is the last index of the sequence
+    -- acc is the sum of values of the sequence from n to m-1.
     go :: Int -> Int -> Int -> Maybe Int
     go n m acc
-      | m > sup     = Nothing
-      | acc' < val  = go n (m+1) acc' -- go further
+      | m > sup     = Nothing          -- no solution
+      | acc' < val  = go n (m+1) acc'  -- go further
       | acc' == val = Just (mini+maxi) -- reach the goal
       | otherwise   = go (n+1) m acc'' -- acc' > val, start at (n+1)
       where
