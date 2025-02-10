@@ -45,9 +45,8 @@ part1 nums = go 0
     go n
       | n > sup = Nothing
       | otherwise =
-        let vec = V.slice n 25 nums -- pick up 25 elements from n
-            x = nums ! (n + 25) -- get the following element
-            pairs = combinationsOpt 2 vec -- compute combinations of pairs
+        let x = nums ! (n + 25)         -- get the following element
+            pairs = pairCombs n 25 nums -- compute combinations of pairs
         in case find ((==x) . sum) pairs of
           Nothing -> Just x -- x is not the sum of two elements in the 25 previous elements.
           Just _  -> go (n+1) -- We need to go further
@@ -60,27 +59,25 @@ part1' nums = foldr f Nothing [sup, sup-1.. 0]
 
     f _ mx@(Just _) = mx
     f n Nothing     =
-      let vec = V.slice n 25 nums
-          x   = nums ! (n+25)
-          pairs = combinationsOpt 2 vec
+      let x = nums ! (n+25)
+          pairs = pairCombs n 25 nums
       in case find ((==x) . sum) pairs of
            Nothing -> Just x
            Just _  -> Nothing
 
--- We build all combinations of k elements from the vector vec
--- by visiting all possibilities like in a backtracking algorithm.
-combinationsOpt :: Int -> Vector Int -> [[Int]]
-combinationsOpt k vec
-  | k < 0      = error "combinationsOpt: bad arguments"
-  | otherwise  = go 0 1 []
-    where
-      n = V.length vec - 1
-      go start depth comb
-        | depth == k = [start..n] <&> consComb
-        | otherwise  = [start..n] >>= \i -> go (i+1) (depth+1) (consComb i)
-               where
-                 consComb i = vec ! i : comb
+-- Build all combinations of pairs from the vector vec
+-- from indices start0 to (start0 + len - 1).
+-- We visit all possibilities like in a backtracking algorithm.
+pairCombs :: Int -> Int -> Vector Int -> [[Int]]
+pairCombs start0 len vec = go start0 (1::Int) []
+  where
+    n = start0 + len - 1
 
+    go start depth comb
+      | depth == 2 = [start..n] <&> consComb
+      | otherwise  = [start..n] >>= \i -> go (i+1) (depth+1) (consComb i)
+        where
+          consComb i = vec ! i : comb
 
 -- Maybe it should be better to use Data.Sequence.
 -- We named the consecutive values from index n to index m (n < m)
@@ -103,7 +100,7 @@ combinationsOpt k vec
 part2 :: Maybe Int -> Vector Int -> Maybe Int
 part2 Nothing _       = Nothing
 part2 (Just val) nums = go 0 0 0 -- start with an empty sequence (from 0 to -1),
-                                 -- the sum is equalt to 0
+                                 -- the sum is equal to 0
   where
     sup = V.length nums - 1
 
