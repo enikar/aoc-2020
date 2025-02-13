@@ -128,28 +128,31 @@ dfs2State' bags bag = do
 
 -- The third version is a rewrite of dfs2state that doesn't use
 -- two mutually recursive functions but only one recursive function.
+-- This is a right way to express the solution.
 yaPart2 :: Bags -> Int
-yaPart2 bags = evalState (yaDfs2 bags needle) M.empty - 1
+yaPart2 bags = evalState (yaDfs2 bags needle) M.empty
 
 yaDfs2 :: Bags -> Bag -> State Visited Int
 yaDfs2 bags bag = do
   w <- yaDfs2' bags bag -- compute the weight for bag
   -- although it's not mandatory in this case
   -- we update Visited with bag and its weight.
-  modify' (M.insert bag w)
-  pure w -- return weight for bag
+  -- We also need to subtract one, because we also count
+  -- the "searched" bag and it is not possible it contains
+  -- itself.
+  modify' (M.insert bag (w-1))
+  pure (w-1) -- return weight for bag
 
--- it isn't sure that method works in another case of
--- the present puzzle.
+-- the right way to write the dfs
 yaDfs2' :: Bags -> Bag -> State Visited Int
-yaDfs2' bags bag = foldlM next 1 (bags ! bag)
+yaDfs2' bags bag = do
+  vis <- get
+  if bag `M.member` vis -- if we've already seen sub
+  then pure (vis ! bag) -- we just return how much it weights.
+  else foldlM next 1 (bags ! bag)
   where
     next acc (sub, n) = do -- sub is a bag contained in bag
-      vis <- get
-      if sub `M.member` vis           -- if we've already seen sub
-      then pure (acc + (vis ! sub)*n) -- we just return how much it weights.
-      else do
-        w <- yaDfs2' bags sub    -- else we compute the weight of sub
+        w <- yaDfs2' bags sub    -- we compute the weight of sub
         modify' (M.insert sub w) -- add sub to Visited with its weight
         -- Now we accumulate the partially computed weight of bag
         -- (argument of yaDfs2').
@@ -161,7 +164,8 @@ yaDfs2' bags bag = foldlM next 1 (bags ! bag)
 -- The fourth version is not a general way to explore a graph.
 -- Thanks to a mistake we discovered that part2' is just
 -- as effective as part2, though we don't keep a record of
--- all visited bags. It's because the graph is acyclic.
+-- all visited bags. It's just a particular case, in general
+-- it should not work. In clear: don't do that!
 part2' :: Bags -> Int
 part2' bags = dfs2' bags needle - 1
 
