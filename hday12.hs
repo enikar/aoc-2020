@@ -27,7 +27,7 @@ data Instruction = N Int
 -- orientation: East=0, South=90, West=180, North=270
 data Ship = Ship {orientation :: Int
                  ,position :: (Int, Int)
-                 ,waypoint :: (Int,Int)
+                 ,waypoint :: (Int,Int) -- (east,north)
                  } deriving (Show)
 
 getDatas :: String -> IO [Instruction]
