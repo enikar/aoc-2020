@@ -1,13 +1,11 @@
 -- AoC 2020, day 11
 
-
 -- naive solution, a bit slow
+
 {- HLINT ignore "Eta reduce" -}
 
 import System.IO (readFile')
-import Data.Foldable
-  (foldl'
-  )
+import Data.Foldable (foldl')
 import Data.Array.Unboxed
   (UArray
   ,(!)
@@ -41,11 +39,11 @@ getDatas filename = buildBoard <$> readFile' filename
 main :: IO ()
 main = do
   board <- getDatas "day11.txt"
-  printSolution "Part1" (partx board countAdj 4)
-  printSolution "Part2" (partx board countInSight 5)
+  printSolution "Part1" (solve board countAdj 4)
+  printSolution "Part2" (solve board countInSight 5)
 
-partx :: Board -> (Coord -> Board -> Int) -> Int  -> Int
-partx board0 countNeighs sup = go board0
+solve :: Board -> (Coord -> Board -> Int) -> Int  -> Int
+solve board0 countNeighs sup = go board0
   where
     go board
       | noUpdatep = countOccupied board'
@@ -89,10 +87,9 @@ countAdj (x0,y0) board = foldl' f 0 steps
           v = (x0+x, y0+y)
           match = inRange limits v && board ! v == '#'
 
--- From a point we need to see if one '#' in one "direction".
--- Here direction means (horizontal, left). (horizontal, rigth)
--- is another direction. If we encounter a 'L' first that counts
--- as 0 '#'
+-- From a point we need to see if there is one '#' in one "direction".
+-- Here direction means (horizontal, left). (horizontal, rigth) is
+-- another direction. If we encounter a 'L' first that counts as 0 '#'
 -- In short we need to find the first '#' or 'L' if any.
 countInSight :: Coord -> Board -> Int
 countInSight (x0,y0) board = foldl' f 0 steps
