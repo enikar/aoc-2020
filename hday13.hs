@@ -47,8 +47,8 @@ part1 goal rules = busId * time
   where
     f x = (x, dt)
       where
-        dt = let q =  goal `div` x
-             in (q+1) * x - goal
+        dt = (q+1) * x - goal
+        q =  goal `div` x
 
     (busId, time) = minimumOn snd (map f rules)
 
