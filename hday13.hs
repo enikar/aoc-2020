@@ -121,6 +121,8 @@ eea x y = go y (x,1,0) (y, 0, 1)
 -- Adapted from: https://hackage.haskell.org/package/arithmoi-0.13.0.0/docs/Math-NumberTheory-Moduli-Chinese.html
 -- We use div and mod instead of quot and rem, so the results are
 -- positive.
+-- As all moduli are prime numbers, only the first equation where
+-- (gcd m1 m2) == 1 is reached.
 crt :: (Integer, Integer) -> (Integer, Integer) -> (Integer, Integer)
 crt (n1, m1) (n2, m2)
   | d == 1
