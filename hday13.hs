@@ -4,20 +4,32 @@
 -- needed to use negative times for delays. The other thing that puzzled
 -- me was the error of copy/paste I made when testing the small
 -- examples…
+-- With the data in the "day13.txt" file, it will take 1.7 billion
+-- years to meet the conditions in part2…
+
+{-# LANGUAGE PackageImports #-}
 
 {- HLINT ignore "Eta reduce" -}
 
 import System.IO (readFile')
-import Data.List (foldl1')
 import Data.List.Extra
   (splitOn
   ,minimumOn
   )
+import Data.Foldable (foldlM)
+
 import Data.Maybe
   (fromMaybe
   ,catMaybes
   )
 import Text.Read (readMaybe)
+import "mtl" Control.Monad.Writer
+  (Writer
+  ,tell
+  ,runWriter
+  )
+
+type Modulo = (Integer, Integer)
 
 printSolution :: Show a => String -> a -> IO ()
 printSolution part sol = putStrLn (part <> ": " <> show sol)
@@ -54,27 +66,38 @@ part1 goal rules = busId * time
     (busId, time) = minimumOn snd (map wt rules)
 
 -- The trick, here, is to understand that buses arrived *after* the
--- first one. So, we need to negate the residue to take account of this.
--- All of this works with positive moduli (the buses Ids are positive).
--- Anyway, I don't know if negative moduli are used somewhere.
+-- first one. So, we need to negate the residues to take account of
+-- this. All of this works with positive moduli (the buses Ids are
+-- positive). Anyway, I don't know if negative moduli are used
+-- somewhere.
 part2 :: [Maybe Integer] -> Integer
-part2 rules = n `mod` m -- Normalize the result to be positive
+part2 rules = fst r
   where
-    (n, m) = crtn (buildRules rules)
+    r = fst (runWriter (crtnW (buildRules rules)))
 
 -- Builds a list of pair with (zip [0..] rules)
 -- then filter out the Nothing with a foldr to just
 -- keep buses Id and theirs shifts. We need to negate
 -- shifts because they represent a delayed time.
-buildRules :: [Maybe Integer] -> [(Integer, Integer)]
+buildRules :: [Maybe Integer] -> [Modulo]
 buildRules rules =  foldr f [] (zip [0..] rules)
   where
     f (_, Nothing) acc = acc
     f (n, Just m) acc = (-n, m) : acc
 
--- repeats crt for all (residue,modulo) in the list.
-crtn :: [(Integer, Integer)] -> (Integer, Integer)
-crtn rules = foldl1' crt rules
+-- -- repeats crt for all (residue,modulo) in the list.
+-- crtn :: [(Integer, Integer)] -> (Integer, Integer)
+-- crtn rules = foldl1' crt rules
+
+-- Rewrited using Writer Monad to see intermediate results in ghci.
+crtnW :: [Modulo] -> Writer [Modulo] Modulo
+crtnW []  = error "Error: crtnW: empty list!"
+crtnW (x:xs) = foldlM f x xs
+  where
+    f acc m = do
+      let m' = crt acc m
+      tell [m']
+      pure m'
 
 -- The Extended Euclidian Algorithm
 -- (eea x y) returns the triplet (d, u0, v0) that satisfied:
@@ -89,12 +112,15 @@ eea x y = go y (x,1,0) (y, 0, 1)
     go 0 ans _ = ans
     go _ (a0, a1, a2) (b0, b1, b2) = go r (b0, b1, b2) (r, u, v)
       where
-        (q,r) = a0 `divMod` b0
+        -- moduli are positive, so we can use quotRem
+        (q,r) = a0 `quotRem` b0
         u = a1 - q*b1
         v = a2 - q*b2
 
 -- The Chinese Remainder Theorem
 -- Adapted from: https://hackage.haskell.org/package/arithmoi-0.13.0.0/docs/Math-NumberTheory-Moduli-Chinese.html
+-- We use div and mod instead of quot and rem, so the results are
+-- positive.
 crt :: (Integer, Integer) -> (Integer, Integer) -> (Integer, Integer)
 crt (n1, m1) (n2, m2)
   | d == 1
