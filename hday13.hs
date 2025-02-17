@@ -29,7 +29,7 @@ import "mtl" Control.Monad.Writer
   ,runWriter
   )
 
-type Modulo = (Integer, Integer)
+type Congruence = (Integer, Integer)
 
 printSolution :: Show a => String -> a -> IO ()
 printSolution part sol = putStrLn (part <> ": " <> show sol)
@@ -71,15 +71,15 @@ part1 goal rules = busId * time
 -- positive). Anyway, I don't know if negative moduli are used
 -- somewhere.
 part2 :: [Maybe Integer] -> Integer
-part2 rules = fst r
+part2 rules = residue
   where
-    r = fst (runWriter (crtnW (buildRules rules)))
+    (residue, _modulo) = fst (runWriter (crtnW (buildRules rules)))
 
 -- Builds a list of pair with (zip [0..] rules)
 -- then filter out the Nothing with a foldr to just
 -- keep buses Id and theirs shifts. We need to negate
 -- shifts because they represent a delayed time.
-buildRules :: [Maybe Integer] -> [Modulo]
+buildRules :: [Maybe Integer] -> [Congruence]
 buildRules rules =  foldr f [] (zip [0..] rules)
   where
     f (_, Nothing) acc = acc
@@ -90,14 +90,21 @@ buildRules rules =  foldr f [] (zip [0..] rules)
 -- crtn rules = foldl1' crt rules
 
 -- Rewrited using Writer Monad to see intermediate results in ghci.
-crtnW :: [Modulo] -> Writer [Modulo] Modulo
+crtnW :: [Congruence] -> Writer [String] Congruence
 crtnW []  = error "Error: crtnW: empty list!"
-crtnW (x:xs) = foldlM f x xs
+crtnW (x:xs) = foldlM reduce x xs
   where
-    f acc m = do
-      let m' = crt acc m
-      tell [m']
-      pure m'
+    logW a b c = "crt "
+                <> show a
+                <> " "
+                <> show b
+                <> " = "
+                <> show c
+
+    reduce acc g = do
+      let g' = crt acc g
+      tell [logW acc g g']
+      pure g'
 
 -- The Extended Euclidian Algorithm
 -- (eea x y) returns the triplet (d, u0, v0) that satisfied:
@@ -122,7 +129,7 @@ eea x y = go y (x,1,0) (y, 0, 1)
 -- We use div and mod instead of quot and rem, so the results are
 -- positive.
 -- As all moduli are prime numbers, only the first equation where
--- (gcd m1 m2) == 1 is reached.
+-- (gcd m1 m2 == 1) is reached.
 crt :: (Integer, Integer) -> (Integer, Integer) -> (Integer, Integer)
 crt (n1, m1) (n2, m2)
   | d == 1
