@@ -45,12 +45,13 @@ main = do
 part1 :: Integer -> [Integer] -> Integer
 part1 goal rules = busId * time
   where
-    f x = (x, dt)
+    -- compute the waiting time for a bus
+    wt bus = (bus, dt)
       where
-        dt = (q+1) * x - goal
-        q =  goal `div` x
+        dt = (q+1) * bus - goal
+        q =  goal `div` bus
 
-    (busId, time) = minimumOn snd (map f rules)
+    (busId, time) = minimumOn snd (map wt rules)
 
 -- The trick, here, is to understand that buses arrived *after* the
 -- first one. So, we need to negate the residue to take account of this.
