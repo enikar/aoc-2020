@@ -29,6 +29,7 @@ import "mtl" Control.Monad.Writer
   ,runWriter
   )
 
+-- a congruence = (residue, modulo)
 type Congruence = (Integer, Integer)
 
 printSolution :: Show a => String -> a -> IO ()
@@ -67,7 +68,7 @@ part1 goal rules = busId * time
 
 -- The trick, here, is to understand that buses arrived *after* the
 -- first one. So, we need to negate the residues to take account of
--- this. All of this works with positive moduli (the buses Ids are
+-- this. All of this, works with positive moduli (the buses Ids are
 -- positive). Anyway, I don't know if negative moduli are used
 -- somewhere.
 part2 :: [Maybe Integer] -> Integer
@@ -86,7 +87,7 @@ buildRules rules =  foldr f [] (zip [0..] rules)
     f (n, Just m) acc = (-n, m) : acc
 
 -- -- repeats crt for all (residue,modulo) in the list.
--- crtn :: [(Integer, Integer)] -> (Integer, Integer)
+-- crtn :: [Congruence] -> Congruence
 -- crtn rules = foldl1' crt rules
 
 -- Rewrited using Writer Monad to see intermediate results in ghci.
