@@ -1,9 +1,9 @@
 -- AoC 2020, day 15
 
 -- This method is quite slow. At least it works without runing out of
--- memory (especialy for part2). We just to use a sparse representaiton
--- to memoize the last turn we encounter a number.
--- It took 5m19s to solve part1 and part2 (real time).
+-- memory (especialy for part2). We just need to use a sparse
+-- representaiton to memoize the last turn we encounter a number. It
+-- took 5m19s to solve part1 and part2 (real time).
 
 {-# LANGUAGE ImportQualifiedPost #-}
 
