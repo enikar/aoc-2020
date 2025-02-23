@@ -67,7 +67,7 @@ main = do
 solve :: (Mask -> Addr -> Int -> Memory -> Memory) -> [Instr] -> Result
 solve updateMem instrs = sum memory
   where
-    -- we are walking along instructions, applying one of them at each
+    -- we are walking along instructions, applying one instruction at each
     -- step
    (_mask, memory) = foldl' f ("", M.empty) instrs
 
@@ -118,8 +118,8 @@ genAddr addr = map f (replicateM n ['0','1'])
 
     g a (m,[])    = (a:m, [])
     g a (m, l@(x:xs))
-      | a /= 'X'  = (a:m, l)
-      | otherwise = (x:m, xs)
+      |a /= 'X'  = (a:m, l)
+      |otherwise = (x:m, xs)
 
 -- conversions for part2
 intToBinStr :: Int -> String
@@ -167,7 +167,7 @@ parseBlock = do
   pure (mask : mems)
 
 -- Hlint insists with some "improvements" I dislike,
--- so I rewrite these two parsers using Applicative style.
+-- so I rewrote these two parsers using Applicative style.
 parseMask :: ReadP Mask
 parseMask = string "mask = " *> many1 (satisfy (`elem` "01X"))
 
