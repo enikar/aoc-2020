@@ -127,7 +127,7 @@ successors :: Int -> Rules ->  Goal -> [Goal]
 successors depth rules goal = S.foldl' f [] (S.difference props gprop)
   where
     props = rules ! depth
-    gprop = S.fromList (M.keys goal)
+    gprop = M.keysSet goal
 
     f acc prop = M.insert prop depth goal : acc
 
