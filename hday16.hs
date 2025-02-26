@@ -109,7 +109,7 @@ part2 game = foldl' f 1 (zip [0..] ticket)
       | "depar" `isPrefixOf` key = n:acc
       | otherwise                = acc
 
-    -- Finally, we mutiply all the ticket values that correspond to
+    -- Finally, we multiply all the ticket values that correspond to
     -- the departure fields.
     f acc (p, n)
       |p `elem` sol' = acc * n
