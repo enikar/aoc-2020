@@ -61,7 +61,10 @@ data Game = Game {properties :: Properties
                  ,nearby :: [[Int]]
                  } deriving (Show)
 
+-- Rules map a position to possible Fields
 type Rules = Vector IntSet
+-- Goal map Field to the position in the ticket unlike what we're
+-- used to i.e. not as in a vector.
 type Goal = IntMap Int
 
 printSolution :: Show a => String -> a -> IO ()
@@ -172,7 +175,7 @@ buildMissings game = foldl' f v0 nears
 
 -- This function assume there is only one field that doesn't match
 -- all property by ticket. So it's not general. Else we would return
--- a [(String, Int)]
+-- a [(Field, Int)]
 noMatchingField :: Properties -> [Int] -> (Field, Int)
 noMatchingField props ticket = fromMaybe errNoMatch field
   where
