@@ -4,9 +4,10 @@
 -- The use of Vector + ByteString improves substantially the speed:
 -- With IntMap + String : 1m22s
 -- With Vector + ByteString : 28s
--- There is another optimization we can do: map properties names to
--- Int from 0 to 19 and then use IntSet instead of Set and then
--- use IntMap instead of Map
+-- So we map field names (what we call also property) to
+-- Int from 0 to 19 and then use IntSet and IntMap instead of Set and
+-- Map. It's speed up again the program. Now we compute part1 and part2
+-- in less than 14s!
 
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -18,16 +19,16 @@ import Data.Maybe
   (listToMaybe
   ,fromMaybe
   )
-import Data.Map (Map)
-import Data.Map qualified as M
+import Data.IntMap (IntMap)
+import Data.IntMap qualified as IM
 import Data.Vector
   (Vector
   ,(!)
   ,(//)
   )
 import Data.Vector qualified as V
-import Data.Set (Set)
-import Data.Set qualified as S
+import Data.IntSet (IntSet)
+import Data.IntSet qualified as S
 import Data.Ix (inRange)
 
 --  modules for parsing
@@ -51,15 +52,17 @@ import Data.Attoparsec.ByteString.Char8
 
 -- Some types defintions
 type Range = (Int, Int)
-type Properties = Map ByteString (Range, Range)
+type Field = Int
+type Properties = IntMap (Range, Range)
 
 data Game = Game {properties :: Properties
+                 ,propMap :: IntMap ByteString
                  ,ourTicket :: [Int]
                  ,nearby :: [[Int]]
                  } deriving (Show)
 
-type Rules = Vector (Set ByteString)
-type Goal = Map ByteString Int
+type Rules = Vector IntSet
+type Goal = IntMap Int
 
 printSolution :: Show a => String -> a -> IO ()
 printSolution part sol = putStrLn (part <> ": " <> show sol)
@@ -86,39 +89,36 @@ part1 game = foldl' f 0 (concat (nearby game))
       |otherwise       = acc + n
 
 inProps :: Properties -> Int -> Bool
-inProps props n = M.foldr f False props
+inProps props n = IM.foldr f False props
   where
     f _        True = True
     f (r1, r2) _    = inRange r1 n || inRange r2 n
 
 -- After experimenting a bit, for each tickect there is one field that
 -- doesn't match one property. First we build an IntMap for position
--- [0..19] (there are 20 fields by ticket and 20 properties) that
+-- [0..19] (there are 20 fields by ticket and 20 "properties") that
 -- indicates which fields are possible. Then we backtrack to find
 -- the first solution.
 part2 :: Game -> Int
-part2 game = foldl' f 1 (zip [0..] ticket)
+part2 game = IM.foldlWithKey' selectDeparture 1 sol
   where
-    ticket = ourTicket game
     rules = buildRules game -- we prepare the backtracking
 
     -- The function solutions try to find all possibilities but we
     -- retain only the first one, thanks to listToMaybe.
-    sol = fromMaybe errPart2 (listToMaybe (solutions 0 rules M.empty))
+    sol = fromMaybe errPart2 (listToMaybe (solutions 0 rules IM.empty))
     errPart2 = error "Error: part2: no solution"
 
     -- When we found a solution, we filter all departure fields and
-    -- build a list of their indices in the solution
-    sol' = M.foldlWithKey' selectDeparture [] sol
+    -- mutliply all correspondant fields of our ticket.
+    ticket = ourTicket game
     selectDeparture acc key n
-      |"departure" `isPrefixOf` key = n:acc
-      |otherwise                    = acc
+      |isDeparture key = acc * (ticket !! n)
+      |otherwise       = acc
 
-    -- Finally, we multiply all the ticket values that correspond to
-    -- the departure fields.
-    f acc (p, n)
-      |p `elem` sol' = acc * n
-      |otherwise     = acc
+    pmap = propMap game
+    isDeparture k = "departure" `isPrefixOf` (pmap IM.! k)
+
 
 -- The backtracking is written with only two functions,
 -- solutions and successors.
@@ -132,9 +132,9 @@ successors :: Int -> Rules ->  Goal -> [Goal]
 successors depth rules goal = S.foldl' f [] (S.difference props gprop)
   where
     props = rules ! depth
-    gprop = M.keysSet goal
+    gprop = IM.keysSet goal
 
-    f acc prop = M.insert prop depth goal : acc
+    f acc prop = IM.insert prop depth goal : acc
 
 -- Preparation of the backtracking.
 -- We procede in two passes, but it must exist a way
@@ -142,7 +142,7 @@ successors depth rules goal = S.foldl' f [] (S.difference props gprop)
 buildRules :: Game -> Rules
 buildRules game = V.map initialize missings
   where
-    props = M.keysSet (properties game)
+    props = IM.keysSet (properties game)
     -- First we determine which fields cannot be at
     -- each position
     missings = buildMissings game
@@ -153,10 +153,10 @@ buildRules game = V.map initialize missings
       | null ps = props
       | otherwise = S.difference props (S.fromList ps)
 
-buildMissings :: Game -> Vector [ByteString]
+buildMissings :: Game -> Vector [Field]
 buildMissings game = foldl' f v0 nears
   where
-    v0 :: Vector [ByteString]
+    v0 :: Vector [Field]
     v0 = V.replicate (length props) []
     props = properties game
     -- First we select all valid tickets
@@ -173,17 +173,21 @@ buildMissings game = foldl' f v0 nears
 -- This function assume there is only one field that doesn't match
 -- all property by ticket. So it's not general. Else we would return
 -- a [(String, Int)]
-noMatchingField :: Properties -> [Int] -> (ByteString, Int)
-noMatchingField props ticket = foldr f ("",0) (zip ticket [0..])
+noMatchingField :: Properties -> [Int] -> (Field, Int)
+noMatchingField props ticket = fromMaybe errNoMatch field
   where
+    errNoMatch = error "Error: noMatchingField: not expected!"
+
     inProperty n (r1, r2) = inRange r1 n || inRange r2 n
 
-    f (n, p)  acc@(s, _)
-      |s /= ""   = acc
-      |otherwise = case M.assocs (M.filter (not . inProperty n) props) of
-                     [] -> acc
-                     [(sp, _)] -> (sp, p)
-                     _         -> error "Error: noMatchingField: not expected!"
+    field = foldr f Nothing (zip ticket [0..])
+
+    f _      acc@(Just _) = acc
+    f (n, p) Nothing =
+      case IM.assocs (IM.filter (not . inProperty n) props) of
+        []        -> Nothing
+        [(sp, _)] -> Just (sp, p)
+        _         -> Nothing
 
 
 -- parsing stuff
@@ -196,7 +200,7 @@ parseDatas str =
 
 parseGame :: Parser Game
 parseGame = do
-  props <- buildProps <$> parseProps
+  (props, pmaps) <- buildProps <$> parseProps
   endOfLine
   endOfLine
   ticket <- parseTicket
@@ -204,6 +208,7 @@ parseGame = do
   endOfLine
   near <- parseNearby
   pure Game {properties = props
+            ,propMap = pmaps
             ,ourTicket = ticket
             ,nearby = near
             }
@@ -235,9 +240,9 @@ parseTicket =
 parseNearby :: Parser [[Int]]
 parseNearby =
   "nearby tickets:\n"
-  *> (decimal `sepBy1` char ',') `sepBy1` char '\n'
+  *> (decimal `sepBy1` char ',') `sepBy1` endOfLine
 
-buildProps :: [(ByteString, (Range, Range))] -> Properties
-buildProps ls = foldl' f M.empty ls
+buildProps :: [(ByteString, (Range, Range))] -> (Properties, IntMap ByteString)
+buildProps ls = foldl' f (IM.empty, IM.empty) (zip [0..] ls)
   where
-    f acc (prop, rs) = M.insert prop rs acc
+    f (props, maps) (n, (prop, rs)) = (IM.insert n rs props, IM.insert n prop maps)
