@@ -162,16 +162,16 @@ buildRules game = foldl' f v0 nears
         xs = noMatchingFields props ticket
 
 noMatchingFields :: Properties -> [Int] -> [(Int, [Field])]
-noMatchingFields props ticket = foldl' f [] (zip ticket [0..])
+noMatchingFields props ticket = foldl' f [] (zip [0..] ticket)
   where
     inProperty n (r1, r2) = inRange r1 n || inRange r2 n
 
-    -- we accumulate all Fields that doesn't match propoerties
+    -- we accumulate all Fields that doesn't match properties
     -- at one position in the ticket
-    f acc (n, p) =
-      case IM.assocs (IM.filter (not . inProperty n) props) of
+    f acc (index, value) =
+      case IM.assocs (IM.filter (not . inProperty value) props) of
         [] -> acc
-        xs -> (p, map fst xs) : acc
+        xs -> (index, map fst xs) : acc
 
 
 -- parsing stuff
