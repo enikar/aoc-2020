@@ -24,7 +24,6 @@ import Data.IntMap qualified as IM
 import Data.Vector
   (Vector
   ,(!)
-  ,(//)
   )
 import Data.Vector qualified as V
 import Data.IntSet (IntSet)
@@ -140,57 +139,39 @@ successors depth rules goal = S.foldl' f [] (S.difference props gprop)
     f acc prop = IM.insert prop depth goal : acc
 
 -- Preparation of the backtracking.
--- We procede in two passes, but it must exist a way
--- to do it in one pass. But it's not so bad.
 buildRules :: Game -> Rules
-buildRules game = V.map initialize missings
+buildRules game = foldl' f v0 nears
   where
-    props = IM.keysSet (properties game)
-    -- First we determine which fields cannot be at
-    -- each position
-    missings = buildMissings game
+    -- First, we select all valid tickets
+    nears = filter (all (inProps props)) (nearby game)
 
-    -- Then we compute for all positions which fields
-    -- are possible
-    initialize ps
-      | null ps = props
-      | otherwise = S.difference props (S.fromList ps)
+    -- Initial vector with all properties for each position
+    v0 = V.replicate (length props) kprops
 
-buildMissings :: Game -> Vector [Field]
-buildMissings game = foldl' f v0 nears
-  where
-    v0 :: Vector [Field]
-    v0 = V.replicate (length props) []
     props = properties game
-    -- First we select all valid tickets
-    nears = filter (all (inProps props)) (nearby  game)
+    kprops = IM.keysSet props
 
-    -- Then we build an IntMap that represent list of
-    -- missing fields at one position for all ticket
-    f acc ticket = acc // [(pos, prop : props')]
+    -- we update the vector by removing missing fields at each indices.
+    -- update one element in the vector
+    -- ss is a IntSet, fs is [Field] (Field is an Int)
+    update ss fs = S.difference ss (S.fromList fs)
+    f acc ticket = V.accum update acc xs
       where
-        props' = acc ! pos
-        (prop, pos) = noMatchingField props ticket
+        -- xs in an association list of (pos, [Field]) as expected
+        -- by V.accum
+        xs = noMatchingFields props ticket
 
-
--- This function assume there is only one field that doesn't match
--- all property by ticket. So it's not general. Else we would return
--- a [(Field, Int)]
-noMatchingField :: Properties -> [Int] -> (Field, Int)
-noMatchingField props ticket = fromMaybe errNoMatch field
+noMatchingFields :: Properties -> [Int] -> [(Int, [Field])]
+noMatchingFields props ticket = foldl' f [] (zip ticket [0..])
   where
-    errNoMatch = error "Error: noMatchingField: not expected!"
-
     inProperty n (r1, r2) = inRange r1 n || inRange r2 n
 
-    field = foldr f Nothing (zip ticket [0..])
-
-    f _      acc@(Just _) = acc
-    f (n, p) Nothing =
+    -- we accumulate all Fields that doesn't match propoerties
+    -- at one position in the ticket
+    f acc (n, p) =
       case IM.assocs (IM.filter (not . inProperty n) props) of
-        []        -> Nothing
-        [(sp, _)] -> Just (sp, p)
-        _         -> Nothing
+        [] -> acc
+        xs -> (p, map fst xs) : acc
 
 
 -- parsing stuff
