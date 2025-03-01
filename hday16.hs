@@ -4,10 +4,26 @@
 -- The use of Vector + ByteString improves substantially the speed:
 -- With IntMap + String : 1m22s
 -- With Vector + ByteString : 28s
--- So we map field names (what we call also property) to
--- Int from 0 to 19 and then use IntSet and IntMap instead of Set and
--- Map. It's speed up again the program. Now we compute part1 and part2
--- in less than 14s!
+-- So we map field names to Int from 0 to 19 and then use IntSet and
+-- IntMap instead of Set and Map. It's speed up again the program. Now
+-- we compute part1 and part2 in less than 14s!
+
+-- The input file is made up of 3 types of data. First, we have fields,
+-- which we also call properties, with validity range for each of
+-- them. There are 20 such fields.
+
+-- Next comes the description of our ticket, and finally a list of
+-- tickets in the vicinity of ours. Each ticket consists of a list of 20
+-- numbers.
+
+-- Each of these numbers must correspond to a field.
+-- All tickets are constructed in the same way, but we don't know the order
+-- of the fields. And there are invalid tickets
+
+-- The aim of the puzzle is to discover this order.
+
+-- There are also invalid tickets that we need to eliminate. These
+-- tickets have at least 1 number that doesn't match any of the fields.
 
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -130,6 +146,7 @@ solutions depth rules goal
   |otherwise = concatMap (solutions (depth+1) rules)
                          (successors depth rules goal)
 
+-- build a list of successors of goal
 successors :: Int -> Rules ->  Goal -> [Goal]
 successors depth rules goal = S.foldl' f [] (S.difference props gprop)
   where
@@ -138,14 +155,15 @@ successors depth rules goal = S.foldl' f [] (S.difference props gprop)
 
     f acc prop = IM.insert prop depth goal : acc
 
+
 -- Preparation of the backtracking.
 buildRules :: Game -> Rules
-buildRules game = foldl' f v0 nears
+buildRules game = foldl' build v0 nears
   where
     -- First, we select all valid tickets
     nears = filter (all (inProps props)) (nearby game)
 
-    -- Initial vector with all properties for each position
+    -- Initial vector with all properties for each index
     v0 = V.replicate (length props) kprops
 
     props = properties game
@@ -155,7 +173,8 @@ buildRules game = foldl' f v0 nears
     -- update one element in the vector
     -- ss is a IntSet, fs is [Field] (Field is an Int)
     update ss fs = S.difference ss (S.fromList fs)
-    f acc ticket = V.accum update acc xs
+
+    build acc ticket = V.accum update acc xs
       where
         -- xs in an association list of (pos, [Field]) as expected
         -- by V.accum
@@ -167,7 +186,10 @@ noMatchingFields props ticket = foldl' f [] (zip [0..] ticket)
     inProperty n (r1, r2) = inRange r1 n || inRange r2 n
 
     -- we accumulate all Fields that doesn't match properties
-    -- at one position in the ticket
+    -- at one index in the ticket.
+    -- Here we suppose that value at index may not match with
+    -- several property fields, although with the input "day16.txt"
+    -- it's not the case.
     f acc (index, value) =
       case IM.assocs (IM.filter (not . inProperty value) props) of
         [] -> acc
@@ -180,7 +202,6 @@ parseDatas str =
   either error
          id
          (parseOnly parseGame str)
-
 
 parseGame :: Parser Game
 parseGame = do
@@ -214,7 +235,6 @@ parseRange =
   liftA2 (,)
          decimal
          (char '-' *> decimal)
-
 
 parseTicket :: Parser [Int]
 parseTicket =
