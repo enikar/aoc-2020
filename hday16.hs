@@ -18,7 +18,7 @@
 
 -- Each of these numbers must correspond to a field.
 -- All tickets are constructed in the same way, but we don't know the order
--- of the fields. And there are invalid tickets
+-- of the fields.
 
 -- The aim of the puzzle is to discover this order.
 
@@ -146,13 +146,20 @@ solutions depth rules goal
   |otherwise = concatMap (solutions (depth+1) rules)
                          (successors depth rules goal)
 
--- build a list of successors of goal
+-- build a list of successors of goal: the length
+-- of current goal is (depth-1), next goals will be
+-- depth long.
+-- Note: here we use S.foldl' to build the list instead
+-- of map over a list of Fields because it's slightly
+-- faster.
 successors :: Int -> Rules ->  Goal -> [Goal]
-successors depth rules goal = S.foldl' f [] (S.difference props gprop)
+successors depth rules goal = S.foldl' f [] nextFields
   where
+    -- gets the possible fields at this position
     props = rules ! depth
-    gprop = IM.keysSet goal
-
+    -- removes field already in the goal
+    nextFields = S.difference props (IM.keysSet goal)
+    -- builds a new goal for each field
     f acc prop = IM.insert prop depth goal : acc
 
 
@@ -170,7 +177,7 @@ buildRules game = foldl' build v0 nears
     kprops = IM.keysSet props
 
     -- we update the vector by removing missing fields at each indices.
-    -- update one element in the vector
+    -- Update one element in the vector:
     -- ss is a IntSet, fs is [Field] (Field is an Int)
     update ss fs = S.difference ss (S.fromList fs)
 
@@ -187,9 +194,6 @@ noMatchingFields props ticket = foldl' f [] (zip [0..] ticket)
 
     -- we accumulate all Fields that doesn't match properties
     -- at one index in the ticket.
-    -- Here we suppose that value at index may not match with
-    -- several property fields, although with the input "day16.txt"
-    -- it's not the case.
     f acc (index, value) =
       case IM.assocs (IM.filter (not . inProperty value) props) of
         [] -> acc
