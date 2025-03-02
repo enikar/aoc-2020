@@ -45,6 +45,7 @@ import Data.Vector qualified as V
 import Data.IntSet (IntSet)
 import Data.IntSet qualified as S
 import Data.Ix (inRange)
+import Data.Foldable (forM_)
 
 --  modules for parsing
 import Data.Functor (void)
@@ -85,6 +86,16 @@ type Goal = IntMap Int
 printSolution :: Show a => String -> a -> IO ()
 printSolution part sol = putStrLn (part <> ": " <> show sol)
 
+-- To show there is only one solution
+printSolutions :: [[Int]] -> IO ()
+printSolutions sols =
+  forM_ (zip sols [(1::Int)..]) $ \(sol, n) ->
+    putStrLn (show n
+              <> ") "
+              <> show sol
+              <> " Product: "
+              <> show (product sol))
+
 getDatas :: String -> IO Game
 getDatas filename = parseDatas <$> BC.readFile filename
 
@@ -93,7 +104,7 @@ main = do
   game <- getDatas "day16.txt"
   printSolution "Part1" (part1 game)
   printSolution "Part2" (part2 game)
-
+  --printSolutions (part2' game) -- to show there is only one solution
 
 -- Part1 is straightforward. We just collect all fields which doesn't
 -- fit into any properties and sum them.
@@ -116,7 +127,7 @@ inProps props n = IM.foldr f False props
 -- doesn't match one property. First we build an IntMap for position
 -- [0..19] (there are 20 fields by ticket and 20 "properties") that
 -- indicates which fields are possible. Then we backtrack to find
--- the first solution.
+-- the first solution (and the only one).
 part2 :: Game -> Int
 part2 game = IM.foldlWithKey' selectDeparture 1 sol
   where
@@ -137,6 +148,21 @@ part2 game = IM.foldlWithKey' selectDeparture 1 sol
     pmap = propMap game
     isDeparture k = "departure" `isPrefixOf` (pmap IM.! k)
 
+-- To show there is only one solution
+part2' :: Game -> [[Int]]
+part2' game = map f sols
+  where
+    rules = buildRules game
+    sols = solutions 0 rules IM.empty
+
+    pmap = propMap game
+    isDeparture k = "departure" `isPrefixOf` (pmap IM.! k)
+
+    ticket = ourTicket game
+    f sol = IM.foldlWithKey' selectDeparture [] sol
+    selectDeparture acc key n
+      |isDeparture key = (ticket !! n) : acc
+      |otherwise       = acc
 
 -- The backtracking is written with only two functions,
 -- solutions and successors.
@@ -148,7 +174,7 @@ solutions depth rules goal
 
 -- build a list of successors of goal: the length
 -- of current goal is (depth-1), next goals will be
--- depth long.
+-- of length depth.
 -- Note: here we use S.foldl' to build the list instead
 -- of map over a list of Fields because it's slightly
 -- faster.
@@ -159,7 +185,7 @@ successors depth rules goal = S.foldl' f [] nextFields
     props = rules ! depth
     -- removes field already in the goal
     nextFields = S.difference props (IM.keysSet goal)
-    -- builds a new goal for each field
+    -- builds a new goal for each new field
     f acc prop = IM.insert prop depth goal : acc
 
 
@@ -176,7 +202,7 @@ buildRules game = foldl' build v0 nears
     props = properties game
     kprops = IM.keysSet props
 
-    -- we update the vector by removing missing fields at each indices.
+    -- We update the vector by removing missing fields at each indices.
     -- Update one element in the vector:
     -- ss is a IntSet, fs is [Field] (Field is an Int)
     update ss fs = S.difference ss (S.fromList fs)
@@ -243,12 +269,15 @@ parseRange =
 parseTicket :: Parser [Int]
 parseTicket =
   "your ticket:\n"
-  *> decimal `sepBy1` char ','
+  *> parseList
+
+parseList :: Parser [Int]
+parseList = decimal `sepBy1` char ','
 
 parseNearby :: Parser [[Int]]
 parseNearby =
   "nearby tickets:\n"
-  *> (decimal `sepBy1` char ',') `sepBy1` endOfLine
+  *> parseList `sepBy1` endOfLine
 
 buildProps :: [(ByteString, (Range, Range))] -> (Properties, IntMap ByteString)
 buildProps ls = foldl' f (IM.empty, IM.empty) (zip [0..] ls)
