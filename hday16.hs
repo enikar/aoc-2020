@@ -35,6 +35,7 @@ import Data.Maybe
   (listToMaybe
   ,fromMaybe
   )
+import Data.Tuple (swap)
 import Data.IntMap (IntMap)
 import Data.IntMap qualified as IM
 import Data.Vector
@@ -45,7 +46,15 @@ import Data.Vector qualified as V
 import Data.IntSet (IntSet)
 import Data.IntSet qualified as S
 import Data.Ix (inRange)
-import Data.Foldable (forM_)
+import Data.Foldable
+  (forM_
+  ,asum
+  )
+
+import Control.Monad.Logic
+  (Logic
+   ,observe
+  )
 
 --  modules for parsing
 import Data.Functor (void)
@@ -73,25 +82,33 @@ type Properties = IntMap (Range, Range)
 
 data Game = Game {properties :: Properties
                  ,propMap :: IntMap ByteString
-                 ,ourTicket :: [Int]
+                 ,ourTicket :: Vector Int
                  ,nearby :: [[Int]]
                  } deriving (Show)
 
 -- Rules map a position to possible Fields
 type Rules = Vector IntSet
--- Goal map Field to the position in the ticket unlike what we're
--- used to i.e. not as in a vector.
+-- Goal map Field to the position in the ticket unlike what we're used
+-- to i.e. not as in a vector. It is to ease the conversion to a Set
+-- with IntMap.KeysSet and use IntSet.difference at each step of the
+-- solution construction in part2 (see successors function)
 type Goal = IntMap Int
 
 printSolution :: Show a => String -> a -> IO ()
 printSolution part sol = putStrLn (part <> ": " <> show sol)
 
--- To show there is only one solution
-printSolutions :: [[Int]] -> IO ()
-printSolutions sols =
-  forM_ (zip sols [(1::Int)..]) $ \(sol, n) ->
-    putStrLn (show n
-              <> ") "
+-- To show there is only one solution, and fields order in the ticket
+printSolutions :: [([Int], [(ByteString, Int)])] -> IO ()
+printSolutions sols = do
+  putStrLn "Part2:"
+  forM_ (zip sols [(1::Int)..]) $ \((sol, fields), n) -> do
+    let s = show n <> ") Fields:"
+        len = length s
+        tab = BC.replicate (len+1) ' '
+    putStrLn s
+    forM_ fields  $ \(name, value) -> do
+      BC.putStrLn (tab <> name <> ": " <> BC.pack (show value))
+    putStrLn ("Departure fields values: "
               <> show sol
               <> " Product: "
               <> show (product sol))
@@ -124,10 +141,10 @@ inProps props n = IM.foldr f False props
     f (r1, r2) _    = inRange r1 n || inRange r2 n
 
 -- After experimenting a bit, for each tickect there is one field that
--- doesn't match one property. First we build an IntMap for position
--- [0..19] (there are 20 fields by ticket and 20 "properties") that
--- indicates which fields are possible. Then we backtrack to find
--- the first solution (and the only one).
+-- doesn't match one property (among the 20). First we build an IntMap
+-- for position [0..19] (there are 20 fields by ticket and 20
+-- "properties") that indicates which fields are possible. Then we
+-- backtrack to find the first solution (and the only one).
 part2 :: Game -> Int
 part2 game = IM.foldlWithKey' selectDeparture 1 sol
   where
@@ -135,21 +152,21 @@ part2 game = IM.foldlWithKey' selectDeparture 1 sol
 
     -- The function solutions try to find all possibilities but we
     -- retain only the first one, thanks to listToMaybe.
-    sol = fromMaybe errPart2 (listToMaybe (solutions 0 rules IM.empty))
+    sol = fromMaybe errPart2 (listToMaybe (solutions' 0 rules IM.empty))
     errPart2 = error "Error: part2: no solution"
 
     -- When we found a solution, we filter all departure fields and
     -- mutliply all correspondant fields of our ticket.
     ticket = ourTicket game
     selectDeparture acc key n
-      |isDeparture key = acc * (ticket !! n)
+      |isDeparture key = acc * (ticket ! n)
       |otherwise       = acc
 
     pmap = propMap game
     isDeparture k = "departure" `isPrefixOf` (pmap IM.! k)
 
--- To show there is only one solution
-part2' :: Game -> [[Int]]
+-- To show there is only one solution and the field order in tickets.
+part2' :: Game -> [([Int], [(ByteString, Int)])]
 part2' game = map f sols
   where
     rules = buildRules game
@@ -158,19 +175,69 @@ part2' game = map f sols
     pmap = propMap game
     isDeparture k = "departure" `isPrefixOf` (pmap IM.! k)
 
+    transpose m = IM.fromList (map swap (IM.toList m))
+
     ticket = ourTicket game
-    f sol = IM.foldlWithKey' selectDeparture [] sol
+    f sol = (IM.foldlWithKey' selectDeparture [] sol, fields)
+      where
+        fields = zip (map (pmap IM.!) (IM.elems (transpose sol)))
+                     (V.toList ticket)
+
     selectDeparture acc key n
-      |isDeparture key = (ticket !! n) : acc
+      |isDeparture key = (ticket ! n) : acc
       |otherwise       = acc
 
 -- The backtracking is written with only two functions,
 -- solutions and successors.
+-- It should be possible to define solutions as a list comprehension,
+-- using lazyness as in Dynamic programing.
 solutions :: Int -> Rules ->  Goal -> [Goal]
 solutions depth rules goal
   |depth == 20 = [goal]
   |otherwise = concatMap (solutions (depth+1) rules)
                          (successors depth rules goal)
+
+-- Alternative way to write solutions.
+-- Use the Monad instance of List.
+solutions' :: Int -> Rules -> Goal -> [Goal]
+solutions' depth rules goal
+  |depth == 20 = pure goal
+  |otherwise   =
+     do goal' <- successors depth rules goal
+        solutions' (depth+1) rules goal'
+
+-- Using LogicT
+part2Logic :: Game -> Int
+part2Logic game = IM.foldlWithKey' selectDeparture 1 sol
+  where
+    rules = buildRules game
+    sol = observe (solutionsLogic 0 rules IM.empty)
+
+    pmap = propMap game
+    isDeparture k = "departure" `isPrefixOf` (pmap IM.! k)
+
+    ticket = ourTicket game
+
+    selectDeparture acc key n
+      |isDeparture key = (ticket ! n) * acc
+      |otherwise       = acc
+
+-- solutionsLogic :: MonadPlus m => Int -> Rules -> Goal -> m Goal
+-- Use the MonadPlus instance of the Logic type
+-- Note: It is almost the same code as solutions'
+solutionsLogic :: Int -> Rules -> Goal -> Logic Goal
+solutionsLogic depth rules goal
+  |depth == 20 = pure goal
+  |otherwise   =
+     do -- first get the successors of goal
+       let goals = successors depth rules goal
+       -- then for each successor try to find a solution.
+       -- Here asum is used as a chooser.
+       -- That works like in the List Monad
+       -- but before we map [Goal] -> [Logic Goal]
+       -- to be in the Logic monad
+       goal' <- asum (map pure goals)
+       solutionsLogic (depth+1) rules goal'
 
 -- build a list of successors of goal: the length
 -- of current goal is (depth-1), next goals will be
@@ -238,7 +305,7 @@ parseGame = do
   (props, pmaps) <- buildProps <$> parseProps
   endOfLine
   endOfLine
-  ticket <- parseTicket
+  ticket <- V.fromList <$> parseTicket
   endOfLine
   endOfLine
   near <- parseNearby
