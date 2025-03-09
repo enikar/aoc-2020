@@ -97,7 +97,7 @@ type Goal = IntMap Int
 printSolution :: Show a => String -> a -> IO ()
 printSolution part sol = putStrLn (part <> ": " <> show sol)
 
--- To show there is only one solution, and fields order in the ticket
+-- To show there is only one solution, and field order in the ticket
 printSolutions :: [([Int], [(ByteString, Int)])] -> IO ()
 printSolutions sols = do
   putStrLn "Part2:"
@@ -152,7 +152,7 @@ part2 game = IM.foldlWithKey' selectDeparture 1 sol
 
     -- The function solutions try to find all possibilities but we
     -- retain only the first one, thanks to listToMaybe.
-    sol = fromMaybe errPart2 (listToMaybe (solutions' 0 rules IM.empty))
+    sol = fromMaybe errPart2 (listToMaybe (solutions 0 rules IM.empty))
     errPart2 = error "Error: part2: no solution"
 
     -- When we found a solution, we filter all departure fields and
@@ -165,7 +165,7 @@ part2 game = IM.foldlWithKey' selectDeparture 1 sol
     pmap = propMap game
     isDeparture k = "departure" `isPrefixOf` (pmap IM.! k)
 
--- To show there is only one solution and the field order in tickets.
+-- To show there is only one solution and field order in tickets.
 part2' :: Game -> [([Int], [(ByteString, Int)])]
 part2' game = map f sols
   where
@@ -187,7 +187,7 @@ part2' game = map f sols
       |isDeparture key = (ticket ! n) : acc
       |otherwise       = acc
 
--- The backtracking is written with only two functions,
+-- The back-tracking is written with only two functions,
 -- solutions and successors.
 -- It should be possible to define solutions as a list comprehension,
 -- using lazyness as in Dynamic programing.
@@ -211,6 +211,7 @@ part2Logic :: Game -> Int
 part2Logic game = IM.foldlWithKey' selectDeparture 1 sol
   where
     rules = buildRules game
+    -- `observe' is named `find' in prolog
     sol = observe (solutionsLogic 0 rules IM.empty)
 
     pmap = propMap game
