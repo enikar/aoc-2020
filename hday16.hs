@@ -27,6 +27,7 @@
 
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 {- HLINT ignore "Eta reduce" -}
 
@@ -303,18 +304,14 @@ parseDatas str =
 
 parseGame :: Parser Game
 parseGame = do
-  (props, pmaps) <- buildProps <$> parseProps
+  (properties, propMap) <- buildProps <$> parseProps
   endOfLine
   endOfLine
-  ticket <- V.fromList <$> parseTicket
+  ourTicket <- V.fromList <$> parseTicket
   endOfLine
   endOfLine
-  near <- parseNearby
-  pure Game {properties = props
-            ,propMap = pmaps
-            ,ourTicket = ticket
-            ,nearby = near
-            }
+  nearby <- parseNearby
+  pure Game {..}
 
 parseProps :: Parser [(ByteString, (Range, Range))]
 parseProps = parseProp `sepBy1` endOfLine
