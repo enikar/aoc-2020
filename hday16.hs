@@ -127,13 +127,11 @@ main = do
 -- Part1 is straightforward. We just collect all fields which doesn't
 -- fit into any properties and sum them.
 part1 :: Game -> Int
-part1 game = foldl' f 0 (concat (nearby game))
+part1 (Game{..}) = foldl' f 0 (concat nearby)
   where
-    props = properties game
-
     f acc n
-      |inProps props n = acc
-      |otherwise       = acc + n
+      |inProps properties n = acc
+      |otherwise            = acc + n
 
 inProps :: Properties -> Int -> Bool
 inProps props n = IM.foldr f False props
@@ -147,7 +145,7 @@ inProps props n = IM.foldr f False props
 -- "properties") that indicates which fields are possible. Then we
 -- backtrack to find the first solution (and the only one).
 part2 :: Game -> Int
-part2 game = IM.foldlWithKey' selectDeparture 1 sol
+part2 game@(Game{..}) = IM.foldlWithKey' selectDeparture 1 sol
   where
     rules = buildRules game -- we prepare the backtracking
 
@@ -158,34 +156,30 @@ part2 game = IM.foldlWithKey' selectDeparture 1 sol
 
     -- When we found a solution, we filter all departure fields and
     -- mutliply all correspondant fields of our ticket.
-    ticket = ourTicket game
     selectDeparture acc key n
-      |isDeparture key = acc * (ticket ! n)
+      |isDeparture key = acc * (ourTicket ! n)
       |otherwise       = acc
 
-    pmap = propMap game
-    isDeparture k = "departure" `isPrefixOf` (pmap IM.! k)
+    isDeparture k = "departure" `isPrefixOf` (propMap IM.! k)
 
 -- To show there is only one solution and field order in tickets.
 part2' :: Game -> [([Int], [(ByteString, Int)])]
-part2' game = map f sols
+part2' game@(Game{..}) = map f sols
   where
     rules = buildRules game
     sols = solutions 0 rules IM.empty
 
-    pmap = propMap game
-    isDeparture k = "departure" `isPrefixOf` (pmap IM.! k)
+    isDeparture k = "departure" `isPrefixOf` (propMap IM.! k)
 
     transpose m = IM.fromList (map swap (IM.toList m))
 
-    ticket = ourTicket game
     f sol = (IM.foldlWithKey' selectDeparture [] sol, fields)
       where
-        fields = zip (map (pmap IM.!) (IM.elems (transpose sol)))
-                     (V.toList ticket)
+        fields = zip (map (propMap IM.!) (IM.elems (transpose sol)))
+                     (V.toList ourTicket)
 
     selectDeparture acc key n
-      |isDeparture key = (ticket ! n) : acc
+      |isDeparture key = (ourTicket ! n) : acc
       |otherwise       = acc
 
 -- The back-tracking is written with only two functions,
@@ -209,19 +203,16 @@ solutions' depth rules goal
 
 -- Using LogicT
 part2Logic :: Game -> Int
-part2Logic game = IM.foldlWithKey' selectDeparture 1 sol
+part2Logic game@(Game{..}) = IM.foldlWithKey' selectDeparture 1 sol
   where
     rules = buildRules game
     -- `observe' is named `find' in prolog
     sol = observe (solutionsLogic 0 rules IM.empty)
 
-    pmap = propMap game
-    isDeparture k = "departure" `isPrefixOf` (pmap IM.! k)
-
-    ticket = ourTicket game
+    isDeparture k = "departure" `isPrefixOf` (propMap IM.! k)
 
     selectDeparture acc key n
-      |isDeparture key = (ticket ! n) * acc
+      |isDeparture key = (ourTicket ! n) * acc
       |otherwise       = acc
 
 -- solutionsLogic :: MonadPlus m => Int -> Rules -> Goal -> m Goal
@@ -260,16 +251,15 @@ successors depth rules goal = S.foldl' f [] nextFields
 
 -- Preparation of the backtracking.
 buildRules :: Game -> Rules
-buildRules game = foldl' build v0 nears
+buildRules Game{..} = foldl' build v0 nears
   where
     -- First, we select all valid tickets
-    nears = filter (all (inProps props)) (nearby game)
+    nears = filter (all (inProps properties)) nearby
 
     -- Initial vector with all properties for each index
-    v0 = V.replicate (length props) kprops
+    v0 = V.replicate (length properties) kprops
 
-    props = properties game
-    kprops = IM.keysSet props
+    kprops = IM.keysSet properties
 
     -- We update the vector by removing missing fields at each indices.
     -- Update one element in the vector:
@@ -280,7 +270,7 @@ buildRules game = foldl' build v0 nears
       where
         -- xs in an association list of (pos, [Field]) as expected
         -- by V.accum
-        xs = noMatchingFields props ticket
+        xs = noMatchingFields properties ticket
 
 noMatchingFields :: Properties -> [Int] -> [(Int, [Field])]
 noMatchingFields props ticket = foldl' f [] (zip [0..] ticket)
