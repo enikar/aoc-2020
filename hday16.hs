@@ -127,7 +127,7 @@ main = do
 -- Part1 is straightforward. We just collect all fields which doesn't
 -- fit into any properties and sum them.
 part1 :: Game -> Int
-part1 (Game{..}) = foldl' f 0 (concat nearby)
+part1 Game{..} = foldl' f 0 (concat nearby)
   where
     f acc n
       |inProps properties n = acc
@@ -151,7 +151,7 @@ part2 game@(Game{..}) = IM.foldlWithKey' selectDeparture 1 sol
 
     -- The function solutions try to find all possibilities but we
     -- retain only the first one, thanks to listToMaybe.
-    sol = fromMaybe errPart2 (listToMaybe (solutions 0 rules IM.empty))
+    sol = fromMaybe errPart2 (listToMaybe (solutions rules 0 IM.empty))
     errPart2 = error "Error: part2: no solution"
 
     -- When we found a solution, we filter all departure fields and
@@ -167,7 +167,7 @@ part2' :: Game -> [([Int], [(ByteString, Int)])]
 part2' game@(Game{..}) = map f sols
   where
     rules = buildRules game
-    sols = solutions 0 rules IM.empty
+    sols = solutions rules 0 IM.empty
 
     isDeparture k = "departure" `isPrefixOf` (propMap IM.! k)
 
@@ -186,20 +186,20 @@ part2' game@(Game{..}) = map f sols
 -- solutions and successors.
 -- It should be possible to define solutions as a list comprehension,
 -- using lazyness as in Dynamic programing.
-solutions :: Int -> Rules ->  Goal -> [Goal]
-solutions depth rules goal
+solutions :: Rules -> Int -> Goal -> [Goal]
+solutions rules depth goal
   |depth == 20 = [goal]
-  |otherwise = concatMap (solutions (depth+1) rules)
-                         (successors depth rules goal)
+  |otherwise = concatMap (solutions rules (depth+1))
+                         (successors rules depth goal)
 
 -- Alternative way to write solutions.
 -- Use the Monad instance of List.
-solutions' :: Int -> Rules -> Goal -> [Goal]
-solutions' depth rules goal
+solutions' :: Rules -> Int -> Goal -> [Goal]
+solutions' rules depth goal
   |depth == 20 = pure goal
   |otherwise   =
-     do goal' <- successors depth rules goal
-        solutions' (depth+1) rules goal'
+     do goal' <- successors rules depth goal
+        solutions' rules (depth+1) goal'
 
 -- Using LogicT
 part2Logic :: Game -> Int
@@ -207,7 +207,7 @@ part2Logic game@(Game{..}) = IM.foldlWithKey' selectDeparture 1 sol
   where
     rules = buildRules game
     -- `observe' is named `find' in prolog
-    sol = observe (solutionsLogic 0 rules IM.empty)
+    sol = observe (solutionsLogic rules 0 IM.empty)
 
     isDeparture k = "departure" `isPrefixOf` (propMap IM.! k)
 
@@ -218,19 +218,19 @@ part2Logic game@(Game{..}) = IM.foldlWithKey' selectDeparture 1 sol
 -- solutionsLogic :: MonadPlus m => Int -> Rules -> Goal -> m Goal
 -- Use the MonadPlus instance of the Logic type
 -- Note: It is almost the same code as solutions'
-solutionsLogic :: Int -> Rules -> Goal -> Logic Goal
-solutionsLogic depth rules goal
+solutionsLogic :: Rules -> Int -> Goal -> Logic Goal
+solutionsLogic rules depth goal
   |depth == 20 = pure goal
   |otherwise   =
      do -- first get the successors of goal
-       let goals = successors depth rules goal
+       let goals = successors rules depth goal
        -- then for each successor try to find a solution.
        -- Here asum is used as a chooser.
        -- That works like in the List Monad
        -- but before we map [Goal] -> [Logic Goal]
        -- to be in the Logic monad
        goal' <- asum (map pure goals)
-       solutionsLogic (depth+1) rules goal'
+       solutionsLogic rules (depth+1) goal'
 
 -- build a list of successors of goal: the length
 -- of current goal is (depth-1), next goals will be
@@ -238,8 +238,8 @@ solutionsLogic depth rules goal
 -- Note: here we use S.foldl' to build the list instead
 -- of map over a list of Fields because it's slightly
 -- faster.
-successors :: Int -> Rules ->  Goal -> [Goal]
-successors depth rules goal = S.foldl' f [] nextFields
+successors :: Rules -> Int -> Goal -> [Goal]
+successors rules depth goal = S.foldl' f [] nextFields
   where
     -- gets the possible fields at this position
     props = rules ! depth
