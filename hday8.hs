@@ -55,8 +55,10 @@ readInt :: String -> Int
 readInt s = fromMaybe errReadInt (readMaybe s')
   where
     -- what a shame, read can't parse an Int prefixed with '+'
-    s' |head s == '+' = tail s
-       |otherwise     = s
+    s' = case s of
+      ('+':rest) -> rest
+      (_:_)      -> s
+      []         -> error "readInt: the input string is empty."
     errReadInt = error ("Error: readInt: can't parse an Int: " <> s)
 
 parseInstr :: String -> Instr

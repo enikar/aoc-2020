@@ -17,10 +17,15 @@ readInt s = fromMaybe errorReadInt (readMaybe s)
   where
     errorReadInt = error ("readInt: Not an Int: " <> s)
 
+parseDatas :: String -> Rules
+parseDatas str = case readP_to_S parseRules str of
+  (r:_) -> fst r
+  []    -> error "parseDatas: input sting doesn't have any rules."
+
 readDatas :: IO [Rules]
 readDatas = do
   datas <- lines <$> readFile "day2.txt"
-  pure (map (fst . head . readP_to_S parseRules) datas)
+  pure (map parseDatas datas)
 
 data Rules = Rules
   {first :: Int

@@ -6,8 +6,7 @@
 module Main(main) where
 
 import Data.List
-  (foldl'
-  ,sort
+  (sort
   ,sortBy
   )
 
@@ -27,7 +26,9 @@ part2 :: [Int] -> Int
 part2 ds = go inf ds'
   where
     ds' = sort ds
-    inf = head ds'
+    inf = case ds' of
+      (d:_) -> d
+      []    -> error "part2: input list is empty."
 
     go _ []   = error "Error: Part2: place not found"
     go v (p:ps)
