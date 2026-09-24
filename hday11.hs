@@ -5,7 +5,6 @@
 {- HLINT ignore "Eta reduce" -}
 
 import System.IO (readFile')
-import Data.Foldable (foldl')
 import Data.Array.Unboxed
   (UArray
   ,(!)
@@ -30,7 +29,9 @@ getDatas filename = buildBoard <$> readFile' filename
       where
         ls = lines str
         ysup = length ls
-        xsup = length (head ls)
+        xsup = case ls of
+          (x:_) -> length x
+          []    -> error "getDatas: input list is empty."
         ls' = [((x, y), c)
               |(y, cs) <- zip [1..] ls
               ,(x, c) <- zip [1..] cs
